@@ -130,3 +130,7 @@ out/
 
 # Spyder
 .spyproject/
+
+### Claude Code
+.claude/
+CLAUDE.md
