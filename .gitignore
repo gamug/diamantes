@@ -98,6 +98,7 @@ outputs
 !.vscode/launch.json
 !.vscode/extensions.json
 *.code-workspace
+.devcontainer/
 
 !launch.json
 
@@ -130,3 +131,7 @@ out/
 
 # Spyder
 .spyproject/
+
+### Claude Code
+.claude/
+CLAUDE.md
