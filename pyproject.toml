@@ -9,7 +9,7 @@ requires-python = ">=3.12"
 readme = "README.md"
 
 dependencies = [
-
+    "pandas>=3.0.5",
 ]
 
 [project.urls]
