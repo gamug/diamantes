@@ -10,6 +10,9 @@ readme = "README.md"
 
 dependencies = [
     "pandas>=3.0.5",
+    "pyarrow>=25.0.1",
+    "ruff>=0.16.3",
+    "tabulate>=0.10.0",
 ]
 
 [project.urls]
