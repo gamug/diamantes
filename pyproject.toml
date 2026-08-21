@@ -9,10 +9,13 @@ requires-python = ">=3.12"
 readme = "README.md"
 
 dependencies = [
-    "pandas>=3.0.5",
+    "ipykernel>=7.3.0",
+    "ipywidgets>=8.1.9",
+    "pandas>=2.2,<3.0",
     "pyarrow>=25.0.1",
     "ruff>=0.16.3",
     "tabulate>=0.10.0",
+    "ydata-profiling[notebook]>=4.18.4",
 ]
 
 [project.urls]
@@ -27,6 +30,7 @@ dev = [
     "pytest-cookies>=0.7.0",
     "pytest-cov>=7.1.0",
     "cruft[pyproject]>=2.16.0",# Automated Cookiecutter template synchronization
+    "setuptools<81", # ydata-profiling imports pkg_resources, dropped by setuptools>=81
 ]
 
 #
