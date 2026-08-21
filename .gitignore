@@ -76,6 +76,9 @@ target/
 *.db
 *.rdb
 
+# MLflow local tracking artifacts (experiment runs are reproducible from the notebooks that log them)
+mlruns/
+
 # Caches
 .mypy_cache/
 .pytest_cache/
