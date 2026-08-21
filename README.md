@@ -14,8 +14,8 @@ from its physical and quality characteristics (`carat`, `cut`, `color`, `clarity
 and a [Kedro-style layered data-engineering convention][Data structure].
 
 This README documents the project itself — the problem, the dataset, and the findings produced by every notebook
-from `1-data` through `5-models`. For the generic template features (tooling rationale, devcontainer, CI, etc.)
-see the [upstream template docs](https://joserzapata.github.io/data-science-project-template/#features-and-tools).
+from `1-data` through `6-interpretation`. For the generic template features (tooling rationale, devcontainer, CI,
+etc.) see the [upstream template docs](https://joserzapata.github.io/data-science-project-template/#features-and-tools).
 
 ## 📦 The dataset
 
@@ -83,7 +83,7 @@ uv run jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor
 │   ├── 3-analysis                      # univariate / bivariate / multivariate EDA, estimator selection, heuristic model
 │   ├── 4-feat_eng                      # deduplication, outlier policy, feature pipeline, stratified split
 │   ├── 5-models                        # baseline → model selection → tuning → MLflow tracking → Deepchecks validation
-│   ├── 6-interpretation                # ⏳ not started yet
+│   ├── 6-interpretation                # permutation importance, SHAP, PDP/ICE, weak-segment analysis
 │   ├── 7-deploy                        # ⏳ not started yet (Streamlit app is the target, per 1-data)
 │   └── 8-reports                       # ⏳ not started yet
 ├── models                              # unused (template default) — final models live in data/06_models instead
@@ -231,22 +231,56 @@ model = load("data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib")
 predictions = model.predict(new_diamonds_df)  # columns: carat, depth, table, x, y, z, cut, color, clarity
 ```
 
+### 6 · `notebooks/6-interpretation` — Model interpretation
+
+[`01-gmg-modeloX_interpretation-2026_08_18.ipynb`](notebooks/6-interpretation/01-gmg-modeloX_interpretation-2026_08_18.ipynb)
+
+A deep, multi-technique interpretation of the final model — permutation importance (3 metrics), SHAP (global
+importance, beeswarm, dependence plots, pairwise interaction values), Partial Dependence/ICE (1D and a manual 2D
+grid), per-diamond local explanations, and segment/error analysis — aimed at extracting checkable knowledge and
+explicitly testing it against every earlier notebook's conclusions.
+
+**Headline findings:**
+
+| Finding | Detail |
+|---|---|
+| `clarity` outranks `carat` in permutation importance | Not a contradiction of the EDA's r ≈ 0.79 carat correlation — `carat`'s size signal is redundantly split across 4 correlated raw columns (`carat`, `x`, `y`, `z`), diluting each one's individual importance, while `clarity` has no redundant backup anywhere in the feature set. On the engineered features, SHAP correctly ranks the consolidated `volume` feature #1 — the `4-feat_eng` multicollinearity fix, vindicated quantitatively. |
+| `depth`/`table` have a real effect the EDA missed | Both show a symmetric, non-monotonic "sweet spot" (inverted-V) around the average proportion in their SHAP dependence plots — invisible to Pearson correlation (r ≈ −0.07 / −0.03) precisely *because* it's non-monotonic and averages out to ≈0. |
+| The heuristic model's independence assumption doesn't fully hold | SHAP interaction values show `color` × `clarity` as the strongest pairwise interaction in the whole model; a manual carat × clarity grid shows the IF-vs-I1 price gap grows from **164% to 228%** between 1.0 and 1.5 carat. `cut`, by contrast, barely interacts with anything — independence roughly holds there. |
+| A real, double-confirmed anomaly | `cut = Premium` prices slightly *below* `cut = Very Good`, confirmed by two independent methods (SHAP dependence on the transformed ordinal codes, and a corrected reading of `PartialDependenceDisplay`'s categorical output, which orders bars alphabetically rather than worst→best — a plotting pitfall caught and documented rather than misreported). |
+| Three weak segments, and they compound | Stones **>2.5ct** (14.4% MAPE vs. ~6.3% for the 1.0–1.5ct bulk of the data), **`Fair` cut** (11.5% MAPE — ties back to `4-feat_eng`'s finding that 98% of depth outliers are `Fair`-cut), and **`I1`/`SI2` clarity** (10.8% / 8.2% MAPE). The single worst mispredicted diamond in the test set sits at the intersection of all three. |
+| An extrapolation trap, caught rather than reported at face value | A synthetic 0.5-carat query returns a suspiciously flat prediction, nearly identical to a 1.0-carat one — the training data's carat floor is exactly 1.00 (confirmed in `2-exploration`), so this is a tree-model boundary artifact, not a real "size barely matters below 1ct" finding. |
+
+Closes with a point-by-point "Does the model agree with domain knowledge?" table comparing every finding above
+against the `3-analysis`/`4-feat_eng`/`5-models` conclusions, and flags fixing the model artifact's picklability
+(`compute_volume`/`volume_feature_names_out` currently must be redefined by every consumer script — see
+`## ⚙️ Notable environment/dependency decisions` below) as a prerequisite for `7-deploy`.
+
 ## 🗺️ Roadmap
 
-Stages `6-interpretation`, `7-deploy` and `8-reports` have not been started yet. Per the problem framing in
-`1-data`, `7-deploy` is expected to be a **Streamlit app** exposing the model in `data/06_models/`.
+Stages `7-deploy` and `8-reports` have not been started yet. Per the problem framing in `1-data`, `7-deploy` is
+expected to be a **Streamlit app** exposing the model in `data/06_models/`, ideally surfacing the
+`exp(shap_i)`-based multiplicative "why this price" explanation built in `6-interpretation` alongside the raw
+prediction.
 
 ## ⚙️ Notable environment/dependency decisions
 
-- `scikit-learn`, `mlflow`, `deepchecks` and `kaleido==0.2.1` were added as project dependencies to support the
-  `5-models` notebooks (see `pyproject.toml`). `kaleido` is pinned below 1.0 because `kaleido>=1.0` requires a
-  separately installed Chrome/Chromium binary that isn't available in this environment.
+- `scikit-learn`, `mlflow`, `deepchecks`, `kaleido==0.2.1` and `shap` were added as project dependencies to
+  support the `5-models` and `6-interpretation` notebooks (see `pyproject.toml`). `kaleido` is pinned below 1.0
+  because `kaleido>=1.0` requires a separately installed Chrome/Chromium binary that isn't available in this
+  environment.
 - `notebooks/5-models/05-...deepcheck...ipynb` documents and works around two upstream Deepchecks 0.19.1 bugs
   against this project's pinned `numpy>=2.0` / `scikit-learn>=1.9` (a removed `np.Inf` alias and a renamed
   `'max_error'` scorer) with small, narrowly-scoped compatibility shims.
 - `notebooks/5-models/04-...experiment-track-model...ipynb` uses MLflow's `cloudpickle` serialization format
   instead of the new default `skops`, because `skops` refuses to (de)serialize the notebook-local `volume`
   feature-engineering function as an "untrusted type".
+- **Known fragility**: `joblib.dump` pickles the `volume` `FunctionTransformer`'s `compute_volume` /
+  `volume_feature_names_out` functions *by reference* (`__main__.compute_volume`), not by value — so every
+  script/notebook that calls `joblib.load()` on `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib`
+  (currently `5-models/03`, `04`, `05` and `6-interpretation/01`) must redefine both functions, with the exact
+  same names, before the load call. Recommended before `7-deploy`: move both functions into an importable `src/`
+  module instead.
 
 ## Credits
 
