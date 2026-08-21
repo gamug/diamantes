@@ -4,10 +4,12 @@ requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
-    "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "(python_full_version >= '3.14' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version >= '3.14' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32')",
     "python_full_version < '3.14' and sys_platform == 'win32'",
     "python_full_version < '3.14' and sys_platform == 'emscripten'",
-    "python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.14' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "(python_full_version < '3.14' and platform_machine != 'x86_64' and sys_platform == 'darwin') or (python_full_version < '3.14' and sys_platform != 'darwin' and sys_platform != 'emscripten' and sys_platform != 'win32')",
 ]
 
 [[package]]
@@ -1660,7 +1662,7 @@ dependencies = [
     { name = "nbformat" },
     { name = "packaging" },
     { name = "prometheus-client" },
-    { name = "pywinpty", marker = "os_name == 'nt'" },
+    { name = "pywinpty", marker = "(os_name == 'nt' and platform_machine != 'x86_64') or (os_name == 'nt' and sys_platform != 'darwin')" },
     { name = "pyzmq" },
     { name = "send2trash" },
     { name = "terminado" },
@@ -1678,7 +1680,7 @@ name = "jupyter-server-terminals"
 version = "0.5.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pywinpty", marker = "os_name == 'nt'" },
+    { name = "pywinpty", marker = "(os_name == 'nt' and platform_machine != 'x86_64') or (os_name == 'nt' and sys_platform != 'darwin')" },
     { name = "terminado" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f4/a7/bcd0a9b0cbba88986fe944aaaf91bfda603e5a50bda8ed15123f381a3b2f/jupyter_server_terminals-0.5.4.tar.gz", hash = "sha256:bbda128ed41d0be9020349f9f1f2a4ab9952a73ed5f5ac9f1419794761fb87f5", size = 31770, upload-time = "2026-01-14T16:53:20.213Z" }
@@ -3714,6 +3716,37 @@ wheels = [
 ]
 
 [[package]]
+name = "shap"
+version = "0.52.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cloudpickle" },
+    { name = "llvmlite" },
+    { name = "numba" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "pandas" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "slicer" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fc/0a/aa278f42c08cb47f2bb503085be0c521da2886929c6605b6105748a7590f/shap-0.52.0.tar.gz", hash = "sha256:81d4ae478f67f8122de1bb411dc4e3ddff0604cbc27dc9cb8ea66d5c73462fd2", size = 4192842, upload-time = "2026-05-28T14:17:49.011Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/09/61/ddbe6fb40120fc7d3dbd702f5f4e0ef1c0795e39f208afbc928ce46a0246/shap-0.52.0-cp312-abi3-macosx_10_13_x86_64.whl", hash = "sha256:334cdc36a925db2242875f69267b88eb6108ec47a6c259f4f87a6b022b6188dc", size = 496146, upload-time = "2026-05-28T14:17:33.352Z" },
+    { url = "https://files.pythonhosted.org/packages/19/d1/b020cb524513496d046a9711ec466c0fdd479b722c09ceb1162c138d0db7/shap-0.52.0-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:9a1116361c01fc5a045cf34681673f6c79100e2e648a6fbde7da084d18193d2e", size = 490868, upload-time = "2026-05-28T14:17:35.075Z" },
+    { url = "https://files.pythonhosted.org/packages/88/58/6e7f8d13b6078485a4bc3c5e6ae97ef52c9208315206982fd0fedabe2db4/shap-0.52.0-cp312-abi3-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:61e431aed9de5f2deae1b7847b00edd739b8d85df9c4d04b137230d20dbbd4d3", size = 495268, upload-time = "2026-05-28T14:17:36.312Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/1c/8aad9c7cc4c09a3841496def5434f56d1b172ad55dbb42fc839c25798f1c/shap-0.52.0-cp312-abi3-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:20b3d09fdff3e94e418abec1f6033522189e4ca554f1014a2b320f80b5454ad2", size = 498042, upload-time = "2026-05-28T14:17:37.664Z" },
+    { url = "https://files.pythonhosted.org/packages/8e/78/f8f86c768a2fae213d99721666eb01653347b1398cf6e24afd84743899a8/shap-0.52.0-cp312-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:6b843d61e18ad4659584e004a4e681fff0648d4cf371830e3019709722190467", size = 1570560, upload-time = "2026-05-28T14:17:39.058Z" },
+    { url = "https://files.pythonhosted.org/packages/5d/20/f5824640d8e7bf6bffb2ed8f6221c8c6fb2d39b638ba72f01b60e934e40f/shap-0.52.0-cp312-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:2828d18366db812599a5d8340ce93fed9c95d97337d90568597b2e96d01ce516", size = 1627401, upload-time = "2026-05-28T14:17:40.435Z" },
+    { url = "https://files.pythonhosted.org/packages/58/bf/6be16d28ef1b6ff69078a1d7ea58892e9d40a4680c1077563f74ebd31c9e/shap-0.52.0-cp312-abi3-win_amd64.whl", hash = "sha256:07d44ace491ca6204dac6ce4fda128bcaeff27553a279bca67c55a14987cc957", size = 499853, upload-time = "2026-05-28T14:17:41.786Z" },
+    { url = "https://files.pythonhosted.org/packages/ca/bc/677a58515255ed9d418f35406f42bb73434481d533b3408f9aba787e7a39/shap-0.52.0-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:514140e2b89f8d4600637cdff8242ac194b96f8ef820b06ab6584d105c1f9b68", size = 494655, upload-time = "2026-05-28T14:17:43.24Z" },
+    { url = "https://files.pythonhosted.org/packages/28/59/e59a449a53217840fa21c7072d6535d85805b77c9f27ab10cedba8e3d5ca/shap-0.52.0-cp314-cp314t-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:fb34bf01572048213d60d75d9329c62112d77a5190c18c05f572044dda8e0d83", size = 499315, upload-time = "2026-05-28T14:17:44.528Z" },
+    { url = "https://files.pythonhosted.org/packages/7c/7f/60c047319846fd144bb9ed1adcb1121a3ff1f36158847d0dfe9c94c7f241/shap-0.52.0-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:09fca6cc9d8d4b9921bf6b56d381a5df0e26cb1b3cd572b2b2f6e48cf9c5d4ad", size = 1576710, upload-time = "2026-05-28T14:17:46.051Z" },
+    { url = "https://files.pythonhosted.org/packages/63/90/e676b9315bee9f6278ac6662c276710c41a3c5b8fb6c21aa89240e04356e/shap-0.52.0-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:59b201ef00ce38359997eb9363ff561c89a98461bd81d9fdae8b5350a176eee5", size = 1633807, upload-time = "2026-05-28T14:17:47.544Z" },
+]
+
+[[package]]
 name = "shellingham"
 version = "1.5.4"
 source = { registry = "https://pypi.org/simple" }
@@ -3745,6 +3778,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c8/9f/46448c4e41a4c5ee4bdb74b3758af48e5ff0faeffe40f4e301bfc7594894/skops-0.14.0.tar.gz", hash = "sha256:6c8c0e047f691a3a582c3258943eecafcbfd79c8c7eef66260f3703e363254f0", size = 608084, upload-time = "2026-04-20T18:23:55.336Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e7/0e/3ae19fa941522cd98e119762e7181d371c8dba0b2d72bfaf9522692e329c/skops-0.14.0-py3-none-any.whl", hash = "sha256:60a5db78a9db46ccee2139a0ba13ab5afb1c96f4749b382e75a371291bbe3e36", size = 132198, upload-time = "2026-04-20T18:23:54.018Z" },
+]
+
+[[package]]
+name = "slicer"
+version = "0.0.8"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d3/f9/b4bce2825b39b57760b361e6131a3dacee3d8951c58cb97ad120abb90317/slicer-0.0.8.tar.gz", hash = "sha256:2e7553af73f0c0c2d355f4afcc3ecf97c6f2156fcf4593955c3f56cf6c4d6eb7", size = 14894, upload-time = "2024-03-09T23:35:26.826Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/63/81/9ef641ff4e12cbcca30e54e72fb0951a2ba195d0cda0ba4100e532d929db/slicer-0.0.8-py3-none-any.whl", hash = "sha256:6c206258543aecd010d497dc2eca9d2805860a0b3758673903456b7df7934dc3", size = 15251, upload-time = "2024-03-09T07:03:07.708Z" },
 ]
 
 [[package]]
@@ -3892,6 +3934,7 @@ dependencies = [
     { name = "pyarrow" },
     { name = "ruff" },
     { name = "scikit-learn" },
+    { name = "shap" },
     { name = "tabulate" },
     { name = "ydata-profiling", extra = ["notebook"] },
 ]
@@ -3917,6 +3960,7 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=25.0.1" },
     { name = "ruff", specifier = ">=0.16.3" },
     { name = "scikit-learn", specifier = ">=1.9.0" },
+    { name = "shap", specifier = ">=0.52.0" },
     { name = "tabulate", specifier = ">=0.10.0" },
     { name = "ydata-profiling", extras = ["notebook"], specifier = ">=4.18.4" },
 ]
@@ -3937,7 +3981,7 @@ version = "0.18.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ptyprocess", marker = "os_name != 'nt'" },
-    { name = "pywinpty", marker = "os_name == 'nt'" },
+    { name = "pywinpty", marker = "(os_name == 'nt' and platform_machine != 'x86_64') or (os_name == 'nt' and sys_platform != 'darwin')" },
     { name = "tornado" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/8a/11/965c6fd8e5cc254f1fe142d547387da17a8ebfd75a3455f637c663fb38a0/terminado-0.18.1.tar.gz", hash = "sha256:de09f2c4b85de4765f7714688fff57d3e75bad1f909b589fde880460c753fd2e", size = 32701, upload-time = "2024-03-12T14:34:39.026Z" }
