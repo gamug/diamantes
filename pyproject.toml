@@ -2,15 +2,16 @@
 name = "template-data-science-container"
 version = "0.1.0"
 description = "Template for data science and AI Projects with the last stable version of python and devcontainer"
-authors = [
-    "Jose R. Zapata <joserzapata.github.io>",
-]
+authors = [{ name = "Jose R. Zapata", email = "joserzapata.github.io" }]
 requires-python = ">=3.12"
 readme = "README.md"
 
 dependencies = [
+    "deepchecks>=0.19.1",
     "ipykernel>=7.3.0",
     "ipywidgets>=8.1.9",
+    "kaleido==0.2.1",
+    "mlflow>=3.15.1",
     "pandas>=2.2,<3.0",
     "pyarrow>=25.0.1",
     "ruff>=0.16.3",
