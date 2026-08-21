@@ -14,7 +14,7 @@ from its physical and quality characteristics (`carat`, `cut`, `color`, `clarity
 and a [Kedro-style layered data-engineering convention][Data structure].
 
 This README documents the project itself — the problem, the dataset, and the findings produced by every notebook
-from `1-data` through `6-interpretation`. For the generic template features (tooling rationale, devcontainer, CI,
+from `1-data` through `7-deploy`. For the generic template features (tooling rationale, devcontainer, CI,
 etc.) see the [upstream template docs](https://joserzapata.github.io/data-science-project-template/#features-and-tools).
 
 ## 📦 The dataset
@@ -84,7 +84,7 @@ uv run jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor
 │   ├── 4-feat_eng                      # deduplication, outlier policy, feature pipeline, stratified split
 │   ├── 5-models                        # baseline → model selection → tuning → MLflow tracking → Deepchecks validation
 │   ├── 6-interpretation                # permutation importance, SHAP, PDP/ICE, weak-segment analysis
-│   ├── 7-deploy                        # ⏳ not started yet (Streamlit app is the target, per 1-data)
+│   ├── 7-deploy                        # 2 Streamlit apps: single + batch price prediction, SHAP explanation
 │   └── 8-reports                       # ⏳ not started yet
 ├── models                              # unused (template default) — final models live in data/06_models instead
 ├── src                                 # FTI pipeline source code (mostly still scaffold/placeholder)
@@ -256,19 +256,46 @@ against the `3-analysis`/`4-feat_eng`/`5-models` conclusions, and flags fixing t
 (`compute_volume`/`volume_feature_names_out` currently must be redefined by every consumer script — see
 `## ⚙️ Notable environment/dependency decisions` below) as a prerequisite for `7-deploy`.
 
+### 7 · `notebooks/7-deploy` — Streamlit deployment
+
+Two Streamlit apps expose the final model (`data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib`)
+as an interactive tool, fulfilling the `1-data` problem framing's goal of reducing seller/buyer information
+asymmetry:
+
+- [`diamantes-streamlit.py`](notebooks/7-deploy/diamantes-streamlit.py) — single-diamond price predictor: enter
+  a diamond's `carat`/`depth`/`table`/`x`/`y`/`z`/`cut`/`color`/`clarity`, get a predicted price plus a
+  **"Why this price?" breakdown** — the same `exp(shap_i)` multiplicative SHAP decomposition built in
+  `6-interpretation`, showing which features pushed the price up or down and by how much.
+- [`diamantes-streamlit-batch.py`](notebooks/7-deploy/diamantes-streamlit-batch.py) — the same single-diamond
+  predictor as one tab, plus a **batch tab**: upload a CSV of many diamonds, get predictions (and average price)
+  for all of them, with a downloadable results CSV. Column names/values are matched case-insensitively (e.g.
+  `"ideal"`, `"IDEAL"` and `"Ideal"` all resolve to the `cut` grade `"Ideal"`).
+
+Both apps warn explicitly when a submitted `carat < 1.00`, since the training data's carat floor is exactly
+1.00 (see `2-exploration`) and predictions below that are extrapolations, per the `6-interpretation` finding.
+
+**Run either app locally:**
+
+```bash
+uv run streamlit run notebooks/7-deploy/diamantes-streamlit.py
+# or, for the batch-upload variant:
+uv run streamlit run notebooks/7-deploy/diamantes-streamlit-batch.py
+```
+
+This starts a local server (by default at <http://localhost:8501>) and opens it in your browser. Both scripts
+resolve the model path relative to their own location, so they can be run from any working directory. Stop the
+server with `Ctrl+C`.
+
 ## 🗺️ Roadmap
 
-Stages `7-deploy` and `8-reports` have not been started yet. Per the problem framing in `1-data`, `7-deploy` is
-expected to be a **Streamlit app** exposing the model in `data/06_models/`, ideally surfacing the
-`exp(shap_i)`-based multiplicative "why this price" explanation built in `6-interpretation` alongside the raw
-prediction.
+Stage `8-reports` has not been started yet.
 
 ## ⚙️ Notable environment/dependency decisions
 
-- `scikit-learn`, `mlflow`, `deepchecks`, `kaleido==0.2.1` and `shap` were added as project dependencies to
-  support the `5-models` and `6-interpretation` notebooks (see `pyproject.toml`). `kaleido` is pinned below 1.0
-  because `kaleido>=1.0` requires a separately installed Chrome/Chromium binary that isn't available in this
-  environment.
+- `scikit-learn`, `mlflow`, `deepchecks`, `kaleido==0.2.1`, `shap` and `streamlit` were added as project
+  dependencies to support the `5-models`, `6-interpretation` and `7-deploy` notebooks (see `pyproject.toml`).
+  `kaleido` is pinned below 1.0 because `kaleido>=1.0` requires a separately installed Chrome/Chromium binary
+  that isn't available in this environment.
 - `notebooks/5-models/05-...deepcheck...ipynb` documents and works around two upstream Deepchecks 0.19.1 bugs
   against this project's pinned `numpy>=2.0` / `scikit-learn>=1.9` (a removed `np.Inf` alias and a renamed
   `'max_error'` scorer) with small, narrowly-scoped compatibility shims.
@@ -278,9 +305,12 @@ prediction.
 - **Known fragility**: `joblib.dump` pickles the `volume` `FunctionTransformer`'s `compute_volume` /
   `volume_feature_names_out` functions *by reference* (`__main__.compute_volume`), not by value — so every
   script/notebook that calls `joblib.load()` on `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib`
-  (currently `5-models/03`, `04`, `05` and `6-interpretation/01`) must redefine both functions, with the exact
-  same names, before the load call. Recommended before `7-deploy`: move both functions into an importable `src/`
-  module instead.
+  (currently `5-models/03`, `04`, `05`, `6-interpretation/01` and both `7-deploy` Streamlit apps) must redefine
+  both functions, with the exact same names, before the load call — this is only safe because each of those
+  entry points defines them at true top-level/`__main__` scope. Still recommended as a future cleanup: move both
+  functions into an importable `src/` module and **retrain/re-save the model** so it pickles a stable, importable
+  reference instead (a bare module move alone won't fix the already-saved `.joblib` artifact, since pickle
+  resolves the exact module path recorded at save time).
 
 ## Credits
 
