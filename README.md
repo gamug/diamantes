@@ -87,7 +87,7 @@ uv run jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor
 │   ├── 7-deploy                        # 2 Streamlit apps: single + batch price prediction, SHAP explanation
 │   └── 8-reports                       # ⏳ not started yet
 ├── models                              # unused (template default) — final models live in data/06_models instead
-├── src                                 # FTI pipeline source code (mostly still scaffold/placeholder)
+├── src                                 # FTI pipeline source code — data/model/inference + 3 runnable pipelines, see src/README.md
 ├── pyproject.toml                      # dependencies (uv-managed)
 └── README.md                           # this file
 ```
@@ -302,15 +302,13 @@ Stage `8-reports` has not been started yet.
 - `notebooks/5-models/04-...experiment-track-model...ipynb` uses MLflow's `cloudpickle` serialization format
   instead of the new default `skops`, because `skops` refuses to (de)serialize the notebook-local `volume`
   feature-engineering function as an "untrusted type".
-- **Known fragility**: `joblib.dump` pickles the `volume` `FunctionTransformer`'s `compute_volume` /
-  `volume_feature_names_out` functions *by reference* (`__main__.compute_volume`), not by value — so every
-  script/notebook that calls `joblib.load()` on `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib`
-  (currently `5-models/03`, `04`, `05`, `6-interpretation/01` and both `7-deploy` Streamlit apps) must redefine
-  both functions, with the exact same names, before the load call — this is only safe because each of those
-  entry points defines them at true top-level/`__main__` scope. Still recommended as a future cleanup: move both
-  functions into an importable `src/` module and **retrain/re-save the model** so it pickles a stable, importable
-  reference instead (a bare module move alone won't fix the already-saved `.joblib` artifact, since pickle
-  resolves the exact module path recorded at save time).
+- **Resolved fragility**: `joblib.dump` pickles the `volume` `FunctionTransformer`'s `compute_volume` /
+  `volume_feature_names_out` functions *by reference*, not by value. Early on this meant `__main__.compute_volume`
+  — every script/notebook loading the model had to redefine both functions locally before calling `joblib.load()`.
+  Both functions now live in the importable `src/data/features.py` module, and
+  `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib` was retrained/re-saved through
+  `pipelines.training_pipeline.run` so it pickles a stable `data.features.compute_volume` reference instead — see
+  `src/README.md` for the current library structure and usage.
 
 ## Credits
 
