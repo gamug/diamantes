@@ -93,3 +93,8 @@ max-complexity = 10
 
 [lint.isort]
 known-third-party = ["fastapi", "pydantic"]
+
+[lint.per-file-ignores]
+# Literal expected values (row counts, thresholds, fixture numbers) are the point of an
+# assertion, not a magic number smell.
+"tests/**" = ["PLR2004"]
