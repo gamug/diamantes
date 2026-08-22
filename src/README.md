@@ -28,8 +28,9 @@ Finally is recommended to have a script that orchestrates the execution of the p
 
 ## This project's modules
 
-Concrete implementation for the diamonds price-prediction task. Every module is unit-tested under the
-mirrored path in `tests/` (e.g. `src/data/cleaning.py` ↔ `tests/data/test_cleaning.py`).
+Concrete implementation for the diamonds price-prediction task. Modules with unit tests are covered under the
+mirrored path in `tests/` (e.g. `src/data/cleaning.py` ↔ `tests/data/test_cleaning.py`) — the two "not yet
+implemented" `validation.py` stubs below have no tests yet either.
 
 | Module | What it does |
 |---|---|
