@@ -1,4 +1,4 @@
-.PHONY: tests help init_env init_git pre-commit_update docs_view docs_test test check
+.PHONY: tests help init_env init_git pre-commit_update docs_view docs_test test check build_features train_model predict_batch
 
 ####----Basic configurations----####
 
@@ -25,6 +25,19 @@ install_data_libs: ## Install pandas, scikit-learn, Jupyter, seaborn
 	@echo "🚀 Installing Jupyter, matplotlib and seaborn in dev..."
 	uv add jupyter matplotlib seaborn --group dev
 
+
+####----Pipelines----####
+build_features: ## Run the feature pipeline: raw CSV -> data/02_intermediate -> data/04_feature
+	@echo "🚀 Running feature pipeline"
+	@PYTHONPATH=src uv run python -m pipelines.feature_pipeline.run
+
+train_model: ## Run the training pipeline: data/04_feature -> tuned model -> data/06_models
+	@echo "🚀 Running training pipeline"
+	@PYTHONPATH=src uv run python -m pipelines.training_pipeline.run
+
+predict_batch: ## Run the inference pipeline: data/05_model_input CSV -> data/07_model_output predictions
+	@echo "🚀 Running inference pipeline"
+	@PYTHONPATH=src uv run python -m pipelines.inference_pipeline.run
 
 ####----Tests----####
 test: ## Test the code with pytest and coverage
