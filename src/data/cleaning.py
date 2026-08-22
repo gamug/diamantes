@@ -9,7 +9,7 @@ per-column regex with ``NA``.
 
 import pandas as pd
 
-from data.constants import CLEAN_DTYPES, RAW_COLUMN_REGEX
+from data.constants import CLEAN_DTYPES, ORDINAL_CATEGORIES, RAW_COLUMN_REGEX
 
 #: Character-class replacements used to turn a raw value into its "shape"
 #: mask, e.g. ``"VS1"`` -> ``"LLD"``, ``"1.02"`` -> ``"D.DD"``.
@@ -30,9 +30,12 @@ def get_all_masks(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         A same-shaped DataFrame of strings where letters, digits and
         whitespace have been replaced by ``L``/``l``/``D``/``s`` respectively
-        (e.g. ``"VS1"`` -> ``"LLD"``).
+        (e.g. ``"VS1"`` -> ``"LLD"``), and missing values are preserved as
+        the literal string ``"NaN"`` (not masked into ``"lll"``).
     """
-    df_string = df.astype({col: str for col in df.columns})
+    # nullable "string" dtype (not plain `str`) so missing values stay NA through the
+    # replacements below, instead of being stringified to "nan" and then masked into "lll"
+    df_string = df.astype("string")
     for pattern, replacement in _MASK_REPLACEMENTS.items():
         df_string = pd.concat(
             [
@@ -41,7 +44,7 @@ def get_all_masks(df: pd.DataFrame) -> pd.DataFrame:
             ],
             axis=1,
         )
-    return df_string
+    return df_string.fillna("NaN")
 
 
 def classify_pattern(pattern: str | None) -> str:
@@ -169,6 +172,36 @@ def clean_column_values(df: pd.DataFrame, regex: dict[str, str] | None = None) -
     return df
 
 
+def restrict_to_known_categories(
+    df: pd.DataFrame, categories: dict[str, list[str]] | None = None
+) -> pd.DataFrame:
+    """Replace categorical values outside their known grade set with ``NA``.
+
+    :func:`clean_column_values`'s regexes only check *shape* (e.g. ``color``
+    accepts any single letter A-J, ``cut``/``clarity`` accept arbitrary
+    alphabetic/alphanumeric text) — a syntactically valid but unknown grade
+    (e.g. ``color="A"``, a ``cut`` typo) would otherwise survive cleaning and
+    only fail later, inside ``OrdinalEncoder``, during model training or
+    inference. This catches those values earlier, at the same cleaning step.
+
+    Args:
+        df: The input DataFrame to be cleaned. Not mutated; a cleaned copy is
+            returned.
+        categories: Mapping of column name to its list of known-valid
+            values. Defaults to :data:`src.data.constants.ORDINAL_CATEGORIES`.
+
+    Returns:
+        A cleaned copy of ``df`` with out-of-vocabulary categorical values
+        replaced by ``NA``.
+    """
+    categories = ORDINAL_CATEGORIES if categories is None else categories
+    df = df.copy()
+    for column, known_values in categories.items():
+        if column in df.columns:
+            df.loc[~df[column].isin(known_values), column] = pd.NA
+    return df
+
+
 def cast_clean_dtypes(df: pd.DataFrame, dtypes: dict[str, str] | None = None) -> pd.DataFrame:
     """Cast a fully-cleaned (no missing values) DataFrame to its final dtypes.
 
@@ -188,9 +221,13 @@ def cast_clean_dtypes(df: pd.DataFrame, dtypes: dict[str, str] | None = None) ->
 def clean_diamantes(df: pd.DataFrame) -> pd.DataFrame:
     """Run the full raw -> typed cleaning pipeline on a raw diamonds DataFrame.
 
-    Replaces atypical values with ``NA`` (:func:`clean_column_values`), drops
-    the resulting incomplete rows, and casts the remaining columns to their
-    final dtypes (:func:`cast_clean_dtypes`).
+    Replaces atypical values with ``NA`` (:func:`clean_column_values`),
+    replaces categorical values outside their known grade set with ``NA``
+    (:func:`restrict_to_known_categories` — a syntactically valid but unknown
+    ``cut``/``color``/``clarity`` would otherwise slip through
+    ``clean_column_values``'s shape-only regexes), drops the resulting
+    incomplete rows, and casts the remaining columns to their final dtypes
+    (:func:`cast_clean_dtypes`).
 
     Args:
         df: Raw diamonds DataFrame, as read from ``data/01_raw/diamantes.csv``.
@@ -199,5 +236,6 @@ def clean_diamantes(df: pd.DataFrame) -> pd.DataFrame:
         A cleaned, fully-typed DataFrame with no missing values.
     """
     cleaned = clean_column_values(df)
+    cleaned = restrict_to_known_categories(cleaned)
     cleaned = cleaned.dropna().reset_index(drop=True)
     return cast_clean_dtypes(cleaned)

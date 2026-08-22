@@ -8,6 +8,7 @@ from data.cleaning import (
     get_all_masks,
     get_report_cleaning,
     get_report_masks,
+    restrict_to_known_categories,
 )
 
 
@@ -35,6 +36,15 @@ def test_get_all_masks_replaces_letters_digits_and_whitespace() -> None:
     assert masked.loc[0, "carat"] == "D.DD"
 
 
+def test_get_all_masks_preserves_missing_values_as_nan_literal() -> None:
+    # a real missing value must be reported as "NaN", not masked into "lll" (astype(str)
+    # would otherwise stringify NaN to "nan" before the letter-masking pass runs)
+    df = pd.DataFrame({"clarity": ["VS1", None], "carat": ["1.02", pd.NA]})
+    masked = get_all_masks(df)
+    assert masked.loc[1, "clarity"] == "NaN"
+    assert masked.loc[1, "carat"] == "NaN"
+
+
 def test_classify_pattern() -> None:
     assert classify_pattern("NaN") == "Missing"
     assert classify_pattern(None) == "Missing"
@@ -59,6 +69,28 @@ def test_clean_column_values_does_not_mutate_input() -> None:
     original = df.copy()
     clean_column_values(df)
     pd.testing.assert_frame_equal(df, original)
+
+
+def test_restrict_to_known_categories_flags_out_of_vocabulary_values() -> None:
+    # "A" is a syntactically valid color (matches the raw regex, a single letter) but is not
+    # one of the known GIA grades (D-J) in ORDINAL_CATEGORIES -- must still be caught
+    df = pd.DataFrame({"color": ["G", "A"], "cut": ["Ideal", "Excellent"]})
+    cleaned = restrict_to_known_categories(df)
+
+    assert cleaned.loc[0, "color"] == "G"
+    assert pd.isna(cleaned.loc[1, "color"])
+    assert cleaned.loc[0, "cut"] == "Ideal"
+    assert pd.isna(cleaned.loc[1, "cut"])  # "Excellent" is not a known cut grade
+
+
+def test_clean_diamantes_drops_rows_with_unknown_but_syntactically_valid_category() -> None:
+    df = _sample_raw_df().iloc[[0, 0]].reset_index(drop=True)  # two copies of the one valid row
+    df.loc[1, "color"] = "A"  # passes the color regex (single letter) but isn't a GIA grade
+
+    result = clean_diamantes(df)
+
+    assert len(result) == 1
+    assert result.iloc[0]["color"] == "G"
 
 
 def test_cast_clean_dtypes() -> None:
