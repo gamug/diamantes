@@ -10,7 +10,7 @@ dependencies = [
     "deepchecks>=0.19.1",
     "ipykernel>=7.3.0",
     "ipywidgets>=8.1.9",
-    "kaleido==0.2.1",
+    "kaleido==1.4.0",
     "mlflow>=3.15.1",
     "pandas>=2.2,<3.0",
     "pyarrow>=25.0.1",
@@ -34,7 +34,7 @@ dev = [
     "pytest-cookies>=0.7.0",
     "pytest-cov>=7.1.0",
     "cruft[pyproject]>=2.16.0",# Automated Cookiecutter template synchronization
-    "setuptools<81", # ydata-profiling imports pkg_resources, dropped by setuptools>=81
+    "setuptools<85", # ydata-profiling imports pkg_resources, dropped by setuptools>=81
 ]
 
 #
