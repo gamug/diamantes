@@ -26,13 +26,9 @@ import warnings
 from pathlib import Path
 from typing import Any, Literal
 
-import matplotlib
-
-matplotlib.use("Agg")  # headless: render to files, never to a display
-
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.figure import Figure  # object-oriented API: no global backend, no pyplot state
 from sklearn.base import BaseEstimator, clone
 from sklearn.metrics import (
     mean_absolute_error,
@@ -201,7 +197,7 @@ def diagnose_fit(train_r2: float, cv_r2: float, test_r2: float) -> dict[str, Any
     else:
         verdict = "good_fit"
         reasons.append(
-            f"training, CV and test R^2 agree within {max(train_cv_gap, abs(cv_test_gap)):.3f}"
+            f"training, CV and test R^2 agree within {max(abs(train_cv_gap), abs(cv_test_gap)):.3f}"
         )
         actions.append("model generalizes well; no change required")
 
@@ -241,8 +237,9 @@ def learning_curve_scores(
 def _plot_comparison(comparison: dict[str, dict[str, float]], path: Path) -> None:
     """Grouped bar chart: train / CV / test for each metric (one subplot each)."""
     names = list(comparison)
-    fig, axes = plt.subplots(1, len(names), figsize=(3.2 * len(names), 3.4))
-    for axis, name in zip(np.atleast_1d(axes), names, strict=True):
+    fig = Figure(figsize=(3.2 * len(names), 3.4), layout="constrained")
+    axes = np.atleast_1d(fig.subplots(1, len(names)))
+    for axis, name in zip(axes, names, strict=True):
         values = comparison[name]
         axis.bar(
             ["train", "cv", "test"],
@@ -252,14 +249,13 @@ def _plot_comparison(comparison: dict[str, dict[str, float]], path: Path) -> Non
         axis.set_title(name)
         axis.grid(axis="y", alpha=0.3)
     fig.suptitle("Train vs. cross-validation vs. test")
-    fig.tight_layout()
     fig.savefig(path, dpi=120)
-    plt.close(fig)
 
 
 def _plot_learning_curve(curve: dict[str, list[float]], path: Path) -> None:
     """Plot the R^2 learning curve (train and validation vs. training size)."""
-    fig, axis = plt.subplots(figsize=(6.0, 4.0))
+    fig = Figure(figsize=(6.0, 4.0), layout="constrained")
+    axis = fig.subplots()
     axis.plot(curve["train_sizes"], curve["train_r2"], marker="o", label="train R^2")
     axis.plot(curve["train_sizes"], curve["val_r2"], marker="o", label="CV R^2")
     axis.set_xlabel("training samples")
@@ -267,9 +263,7 @@ def _plot_learning_curve(curve: dict[str, list[float]], path: Path) -> None:
     axis.set_title("Learning curve")
     axis.grid(alpha=0.3)
     axis.legend()
-    fig.tight_layout()
     fig.savefig(path, dpi=120)
-    plt.close(fig)
 
 
 def _log_comparison(comparison: dict[str, dict[str, float]]) -> None:

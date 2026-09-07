@@ -137,6 +137,13 @@ def test_diagnose_fit_flags_underfitting() -> None:
     assert any("feature" in action for action in diagnosis["recommended_actions"])
 
 
+def test_diagnose_fit_reports_the_gap_when_cv_beats_train() -> None:
+    diagnosis = diagnose_fit(train_r2=0.90, cv_r2=0.95, test_r2=0.95)
+
+    assert diagnosis["verdict"] == "good_fit"
+    assert "within 0.050" in diagnosis["reasons"][0]  # abs(train - cv), not a signed 0.000
+
+
 # --- learning curve -------------------------------------------
 
 
