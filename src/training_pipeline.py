@@ -52,6 +52,7 @@ from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
 from diamond_features import KNOWN_CATEGORIES, PRICE_COLUMN, VOLUME_COLUMN
 from feature_pipeline import FEATURE_PARQUET_PATH
+from model_validation import validate_model
 from split_validation import validate_train_test_split
 
 logger = logging.getLogger(__name__)
@@ -292,7 +293,7 @@ def run_training_pipeline(
     metrics_path: Path = METRICS_PATH,
     *,
     param_grid: dict[str, list[Any]] | None = None,
-    validate_split: bool = True,
+    validate: bool = True,
 ) -> tuple[TransformedTargetRegressor, dict[str, float]]:
     """Load features, train + tune the model, evaluate it and persist artifacts.
 
@@ -302,10 +303,12 @@ def run_training_pipeline(
         metrics_path: Destination for the evaluation-metrics JSON.
         param_grid: Optional override for the hyper-parameter grid (see
             :func:`train_model`).
-        validate_split: When ``True`` (default) vet the train/test split for
-            leakage and distribution mismatch before training (issue #25);
-            a failing check raises
-            ``split_validation.TrainTestSplitValidationError``.
+        validate: When ``True`` (default) run the validation steps -- the
+            train/test split leakage/distribution check before training
+            (issue #25) and the cross-validation / generalization analysis
+            after (issue #26). A failing check raises
+            ``split_validation.TrainTestSplitValidationError`` or
+            ``model_validation.ModelValidationError``.
 
     Returns:
         ``(fitted_model, metrics)``.
@@ -318,7 +321,7 @@ def run_training_pipeline(
     x_train, x_test, y_train, y_test = split_train_test(features, target)
     logger.info("Train rows: %d | test rows: %d", len(x_train), len(x_test))
 
-    if validate_split:
+    if validate:
         validate_train_test_split((x_train, y_train), (x_test, y_test))
         logger.info("Train/test split passed leakage and distribution checks")
 
@@ -327,6 +330,12 @@ def run_training_pipeline(
 
     metrics = evaluate_model(model, x_test, y_test)
     logger.info("Test metrics: %s", metrics)
+
+    if validate:
+        report = validate_model(model, (x_train, y_train), (x_test, y_test))
+        logger.info(
+            "Model validation: %s (passed=%s)", report["diagnosis"]["verdict"], report["passed"]
+        )
 
     save_model(model, model_path)
     logger.info("Wrote fitted model to %s", model_path)

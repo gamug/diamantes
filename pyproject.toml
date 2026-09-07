@@ -12,6 +12,7 @@ dependencies = [
     "ipywidgets>=8.1.9",
     "joblib>=1.5.3",
     "kaleido==0.2.1",
+    "matplotlib>=3.10.0",
     "mlflow>=3.15.1",
     "pandas>=2.2,<3.0",
     "pandera>=0.33.1",
