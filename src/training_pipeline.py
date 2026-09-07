@@ -52,6 +52,7 @@ from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
 from diamond_features import KNOWN_CATEGORIES, PRICE_COLUMN, VOLUME_COLUMN
 from feature_pipeline import FEATURE_PARQUET_PATH
+from split_validation import validate_train_test_split
 
 logger = logging.getLogger(__name__)
 
@@ -291,6 +292,7 @@ def run_training_pipeline(
     metrics_path: Path = METRICS_PATH,
     *,
     param_grid: dict[str, list[Any]] | None = None,
+    validate_split: bool = True,
 ) -> tuple[TransformedTargetRegressor, dict[str, float]]:
     """Load features, train + tune the model, evaluate it and persist artifacts.
 
@@ -300,6 +302,10 @@ def run_training_pipeline(
         metrics_path: Destination for the evaluation-metrics JSON.
         param_grid: Optional override for the hyper-parameter grid (see
             :func:`train_model`).
+        validate_split: When ``True`` (default) vet the train/test split for
+            leakage and distribution mismatch before training (issue #25);
+            a failing check raises
+            ``split_validation.TrainTestSplitValidationError``.
 
     Returns:
         ``(fitted_model, metrics)``.
@@ -311,6 +317,10 @@ def run_training_pipeline(
     features, target = split_features_target(feature_table)
     x_train, x_test, y_train, y_test = split_train_test(features, target)
     logger.info("Train rows: %d | test rows: %d", len(x_train), len(x_test))
+
+    if validate_split:
+        validate_train_test_split((x_train, y_train), (x_test, y_test))
+        logger.info("Train/test split passed leakage and distribution checks")
 
     logger.info("Training model (grid search over %s)", param_grid or DEFAULT_PARAM_GRID)
     model = train_model(x_train, y_train, param_grid=param_grid)
