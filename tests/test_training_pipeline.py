@@ -295,7 +295,7 @@ def test_run_training_pipeline_writes_model_and_metrics(
     metrics_path = tmp_path / "08_reporting" / "metrics.json"
 
     model, metrics = run_training_pipeline(
-        feature_parquet, model_path, metrics_path, param_grid=_NO_GRID, validate_split=False
+        feature_parquet, model_path, metrics_path, param_grid=_NO_GRID, validate=False
     )
 
     assert model_path.is_file()
@@ -307,46 +307,52 @@ def test_run_training_pipeline_writes_model_and_metrics(
     assert np.isfinite(model.predict(pd.read_parquet(feature_parquet)[MODEL_FEATURES])).all()
 
 
-def test_run_training_pipeline_validates_the_split_before_training(
+def test_run_training_pipeline_runs_validation_steps(
     tmp_path: Path, feature_parquet: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     seen: dict[str, int] = {}
 
-    def _spy(
+    def _split_spy(
+        train: tuple[pd.DataFrame, pd.Series], test: tuple[pd.DataFrame, pd.Series], **_: object
+    ) -> None:
+        seen["split_train"] = len(train[0])
+        seen["split_test"] = len(test[0])
+
+    def _model_spy(
+        model: object,
         train: tuple[pd.DataFrame, pd.Series],
         test: tuple[pd.DataFrame, pd.Series],
-        *_: object,
-        **__: object,
-    ) -> None:
-        seen["train"] = len(train[0])
-        seen["test"] = len(test[0])
+        **_: object,
+    ) -> dict[str, object]:
+        seen["model_train"] = len(train[0])
+        return {"diagnosis": {"verdict": "good_fit"}, "passed": True}
 
-    monkeypatch.setattr(tp, "validate_train_test_split", _spy)
+    monkeypatch.setattr(tp, "validate_train_test_split", _split_spy)
+    monkeypatch.setattr(tp, "validate_model", _model_spy)
 
     run_training_pipeline(
-        feature_parquet,
-        tmp_path / "m.joblib",
-        tmp_path / "metrics.json",
-        param_grid=_NO_GRID,
+        feature_parquet, tmp_path / "m.joblib", tmp_path / "metrics.json", param_grid=_NO_GRID
     )
 
-    assert seen["train"] > seen["test"] > 0
+    assert seen["split_train"] > seen["split_test"] > 0
+    assert seen["model_train"] == seen["split_train"]
 
 
-def test_run_training_pipeline_can_skip_split_validation(
+def test_run_training_pipeline_can_skip_validation(
     tmp_path: Path, feature_parquet: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def _boom(*_: object, **__: object) -> None:
-        raise AssertionError("split validation should not run when validate_split=False")
+        raise AssertionError("validation should not run when validate=False")
 
     monkeypatch.setattr(tp, "validate_train_test_split", _boom)
+    monkeypatch.setattr(tp, "validate_model", _boom)
 
     run_training_pipeline(
         feature_parquet,
         tmp_path / "m.joblib",
         tmp_path / "metrics.json",
         param_grid=_NO_GRID,
-        validate_split=False,
+        validate=False,
     )
 
 
