@@ -288,8 +288,12 @@ def build_inference_features(raw_df: pd.DataFrame) -> pd.DataFrame:
             ``price`` optional), values as text like the source CSV.
 
     Returns:
-        A copy with the :data:`INFERENCE_FEATURE_COLUMNS` columns, one row per
-        input row, cast to :data:`FEATURE_TABLE_DTYPES`.
+        A copy with the :data:`INFERENCE_FEATURE_COLUMNS` columns (no ``price``
+        label), one row per input row. Measurement columns get the ``float32``
+        and grade columns the ``category`` dtype from
+        :data:`FEATURE_TABLE_DTYPES`, but -- unlike :func:`build_features` --
+        missing values are expected and kept as ``NaN`` for the downstream model
+        pipeline to impute.
     """
     df = coerce_numeric_columns(raw_df)
     df = restrict_categorical_columns(df)
