@@ -13,9 +13,10 @@ from its physical and quality characteristics (`carat`, `cut`, `color`, `clarity
 (managed via [Cruft]), following the [FTI (Feature/Training/Inference) pipeline pattern](https://www.hopsworks.ai/post/mlops-to-ml-systems-with-fti-pipelines)
 and a [Kedro-style layered data-engineering convention][Data structure].
 
-This README documents the project itself — the problem, the dataset, and the findings produced by every notebook
-from `1-data` through `7-deploy`. For the generic template features (tooling rationale, devcontainer, CI,
-etc.) see the [upstream template docs](https://joserzapata.github.io/data-science-project-template/#features-and-tools).
+This README documents the project itself — the problem, the dataset, the findings produced by every notebook
+from `1-data` through `7-deploy`, and the standalone FTI pipeline scripts under `src/` (see
+**The `src/` FTI pipeline scripts** below). For the generic template features (tooling rationale, devcontainer,
+CI, etc.) see the [upstream template docs](https://joserzapata.github.io/data-science-project-template/#features-and-tools).
 
 ## 📦 The dataset
 
@@ -74,8 +75,8 @@ uv run jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor
 │   ├── 04_feature                      # diamantes_clean.parquet (deduped + corrupted rows removed, 18,977 rows)
 │   ├── 05_model_input                  # (unused — preprocessing is embedded in each model's sklearn Pipeline)
 │   ├── 06_models                       # 🏆 final serialized model artifacts (joblib + MLflow format)
-│   ├── 07_model_output                 # (not yet used — see Roadmap)
-│   ├── 08_reporting                    # ydata-profiling HTML report
+│   ├── 07_model_output                 # diamantes_predictions.parquet/.png (inference pipeline output)
+│   ├── 08_reporting                    # ydata-profiling report + training / split / model-validation reports
 │   └── README.md                       # description of the data layering convention
 ├── notebooks
 │   ├── 1-data                          # problem framing (Géron-style questions)
@@ -87,7 +88,7 @@ uv run jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor
 │   ├── 7-deploy                        # 2 Streamlit apps: single + batch price prediction, SHAP explanation
 │   └── 8-reports                       # ⏳ not started yet
 ├── models                              # unused (template default) — final models live in data/06_models instead
-├── src                                 # FTI pipeline source code (mostly still scaffold/placeholder)
+├── src                                 # FTI pipeline scripts (feature / training / inference) — see below
 ├── pyproject.toml                      # dependencies (uv-managed)
 └── README.md                           # this file
 ```
@@ -286,9 +287,74 @@ This starts a local server (by default at <http://localhost:8501>) and opens it 
 resolve the model path relative to their own location, so they can be run from any working directory. Stop the
 server with `Ctrl+C`.
 
+## 🏭 The `src/` FTI pipeline scripts
+
+The notebook analysis above was restructured into standalone, **autonomously runnable** scripts under `src/`,
+following the tutor's Feature/Training/Inference spec ([issue #15](https://github.com/gamug/diamantes/issues/15)
+and its sub-tasks #22–#27). Each resolves its input/output paths relative to the repo root, so it can be
+launched from any working directory.
+
+| Module | Issue | Role |
+| --- | --- | --- |
+| [`diamond_features.py`](src/diamond_features.py) | #22 | **Library** (not run directly). Pure transforms: type-fix text numeric columns, null out values outside the documented ranges / category vocabularies, drop invalid / duplicate / geometry-inconsistent rows, engineer `volume = x*y*z`. `build_features` (drops bad rows, for training) and `build_inference_features` (row-preserving, leaves `NaN`s for the model to impute) are the entry points. |
+| [`feature_pipeline.py`](src/feature_pipeline.py) | #22 | **Runnable.** Raw CSV → validated feature table (Parquet). |
+| [`feature_validation.py`](src/feature_validation.py) | #23 | **Library.** A `pandera` schema + `validate_features()` (exact dtypes, documented ranges, known categories, row uniqueness, `volume == x*y*z` / `depth ≈ 2z/(x+y)*100` integrity). Runs as a gate inside `feature_pipeline` — nothing is written if it fails. |
+| [`training_pipeline.py`](src/training_pipeline.py) | #24 | **Runnable.** Feature table → stratified `clarity × cut` split → `ColumnTransformer` (impute + scale + worst→best ordinal encode) + `HistGradientBoostingRegressor` on `log(price)` → `GridSearchCV` → held-out metrics → serialized model + metrics JSON. Also invokes the #25 / #26 validation steps (`validate=` toggle). |
+| [`split_validation.py`](src/split_validation.py) | #25 | **Library.** `validate_train_test_split()` — a curated `deepchecks` train/test suite (row leakage, unseen categories, feature/label drift, size) that raises `TrainTestSplitValidationError` or warns, and writes an HTML report. |
+| [`model_validation.py`](src/model_validation.py) | #26 | **Library.** `validate_model()` — 5-fold cross-validation of the tuned model, train-vs-CV-vs-test comparison, `good_fit` / `overfitting` / `underfitting` diagnosis with recommended actions, plus a JSON report and learning-curve / comparison PNGs. Raises `ModelValidationError` when CV R² < 0.80 or the train−CV R² gap > 0.10. |
+| [`inference_pipeline.py`](src/inference_pipeline.py) | #27 | **Runnable.** Trained model + new raw CSV → one predicted price per input row → predictions Parquet + PNG. |
+| [`_deepchecks_compat.py`](src/_deepchecks_compat.py) | #25 | **Library.** Import shims + a façade so `deepchecks` 0.19.1 (its final release) loads on this repo's `numpy>=2` / `scikit-learn>=1.9` stack (it references the removed `np.Inf` and `'max_error'` scorer). Import deepchecks symbols from here, never from `deepchecks` directly. |
+
+### Run the pipelines
+
+**Prerequisites:** `make install_env` once (creates `.venv` and installs deps). Then, from the repo root,
+run the three stages **in order** — each reads the file the previous one wrote, and everything under `data/`
+is git-ignored, so a fresh clone starts with only `data/01_raw/diamantes.csv`:
+
+```bash
+uv run python src/feature_pipeline.py      # stage 1 — issue #22 (+ #23 validation gate)
+uv run python src/training_pipeline.py     # stage 2 — issue #24 (+ #25 split checks, #26 model validation)
+uv run python src/inference_pipeline.py    # stage 3 — issue #27
+```
+
+`uv run` uses the project's `.venv`; no `PYTHONPATH` or `cd` is needed. Progress and results are logged to
+the console. What each stage needs and produces:
+
+| Stage | Command | Reads | Writes |
+| --- | --- | --- | --- |
+| **1 · Feature** | `uv run python src/feature_pipeline.py` | `data/01_raw/diamantes.csv` | `data/04_feature/diamantes_features.parquet` (55,126 → 53,462 rows) |
+| **2 · Training** | `uv run python src/training_pipeline.py` | `data/04_feature/diamantes_features.parquet` | `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib`, `data/08_reporting/training_metrics.json`, `train_test_split_validation.html`, `model_validation.json` + `model_validation*.png` |
+| **3 · Inference** | `uv run python src/inference_pipeline.py` | the stage-2 model + `data/01_raw/diamantes.csv` (stand-in for a real new batch) | `data/07_model_output/diamantes_predictions.parquet` (input columns + `predicted_price`, one row per input) + `diamantes_predictions.png` |
+
+Latest stage-2 run: **test MAPE 7.4 % · R² 0.982 · fit diagnosis "good_fit"**.
+
+To score a different CSV (same raw column layout as `data/01_raw/diamantes.csv`), or to point a stage at
+non-default paths, call its `run_*_pipeline(...)` function directly. These modules are imported by bare name
+(the pytest `pythonpath = ["src"]` convention), so put `src` on `PYTHONPATH` for anything other than
+`uv run python src/<name>.py`:
+
+```bash
+PYTHONPATH=src uv run python -c "import inference_pipeline as ip; ip.run_inference_pipeline(input_csv='path/to/new_diamonds.csv')"
+PYTHONPATH=src uv run python -m training_pipeline          # same as: uv run python src/training_pipeline.py
+```
+
+Each `run_*_pipeline(...)` takes custom paths (and, for training, a `param_grid` and a `validate` toggle);
+the modules also expose small tested helpers (`load_*`, `build_*`, `evaluate_*`, …) so a notebook or another
+script can drive individual steps. `tests/test_*_pipeline.py` and `tests/test_*_validation.py` cover every
+module (`make test`).
+
+### Relationship to `notebooks/5-models`
+
+`training_pipeline.py` re-implements the model chosen in `5-models` (same `HistGradientBoostingRegressor` on
+`log(price)`, same worst→best ordinal encoding and stratified `clarity × cut` split), but does the `volume`
+engineering **upstream** in `diamond_features` instead of inside a pickled `FunctionTransformer` — so the
+`.joblib` it writes has none of the `compute_volume` picklability fragility described below and loads with a
+plain `joblib.load` and no helper redefinition. It writes to the **same path** as the notebook artifact
+(`data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib`), overwriting it.
+
 ## 🗺️ Roadmap
 
-Stage `8-reports` has not been started yet.
+The `src/` FTI pipeline scripts (issues #22–#27) are complete. Stage `8-reports` has not been started yet.
 
 ## ⚙️ Notable environment/dependency decisions
 
