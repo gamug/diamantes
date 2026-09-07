@@ -263,3 +263,37 @@ def build_features(raw_df: pd.DataFrame) -> pd.DataFrame:
     df = add_volume_feature(df)
     df = df[FEATURE_TABLE_COLUMNS]
     return cast_feature_dtypes(df)
+
+
+#: Engineered feature columns without the ``price`` label -- the shape the
+#: inference pipeline feeds to a trained model.
+INFERENCE_FEATURE_COLUMNS: list[str] = [
+    column for column in FEATURE_TABLE_COLUMNS if column != PRICE_COLUMN
+]
+
+
+def build_inference_features(raw_df: pd.DataFrame) -> pd.DataFrame:
+    """Transform raw new diamonds into model inputs, keeping every input row.
+
+    Same cleaning and engineering as :func:`build_features` (type-fix text
+    numeric columns, null out values outside the documented ranges or category
+    vocabularies, engineer ``volume = x * y * z``) **except** the row-dropping
+    steps: at inference time we want one prediction per input row, so invalid /
+    missing values are left as ``NaN`` for the model pipeline's imputers to
+    handle rather than removed. The ``price`` label is not required.
+
+    Args:
+        raw_df: New data with the raw column layout (``carat``, ``cut``,
+            ``color``, ``clarity``, ``depth``, ``table``, ``x``, ``y``, ``z``;
+            ``price`` optional), values as text like the source CSV.
+
+    Returns:
+        A copy with the :data:`INFERENCE_FEATURE_COLUMNS` columns, one row per
+        input row, cast to :data:`FEATURE_TABLE_DTYPES`.
+    """
+    df = coerce_numeric_columns(raw_df)
+    df = restrict_categorical_columns(df)
+    df = apply_domain_bounds(df)
+    df = add_volume_feature(df)
+    df = df[INFERENCE_FEATURE_COLUMNS]
+    return cast_feature_dtypes(df)
