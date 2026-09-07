@@ -68,6 +68,13 @@ MEASUREMENT_BOUNDS: dict[str, tuple[float, float]] = {
     "z": (0.0, 31.8),
 }
 
+#: Max allowed disagreement (percentage points) between the recorded ``depth``
+#: and the depth percentage implied by the geometry ``2*z / (x + y) * 100`` --
+#: ``depth``'s own definition in the data dictionary. Rows beyond this are
+#: internally inconsistent records (a mistyped dimension) rather than real
+#: stones and are dropped by :func:`drop_geometry_inconsistent_rows`.
+GEOMETRY_DEPTH_TOLERANCE_PP: float = 1.0
+
 #: Final dtypes for the stored feature table.
 FEATURE_TABLE_DTYPES: dict[str, str] = {
     "carat": "float32",
@@ -163,6 +170,45 @@ def drop_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
     return cleaned.loc[~swapped].reset_index(drop=True)
 
 
+def implied_depth_percentage(df: pd.DataFrame) -> pd.Series:
+    """Depth percentage implied by a stone's geometry: ``2*z / (x + y) * 100``.
+
+    This is the definition of ``depth`` given in the data dictionary
+    (``data/01_raw/datos_diamantes_Info.txt``).
+
+    Args:
+        df: Table with numeric ``x``, ``y`` and ``z`` columns.
+
+    Returns:
+        The implied depth percentage, one value per row.
+    """
+    return 2.0 * df["z"] / (df["x"] + df["y"]) * 100.0
+
+
+def drop_geometry_inconsistent_rows(
+    df: pd.DataFrame, tolerance_pp: float = GEOMETRY_DEPTH_TOLERANCE_PP
+) -> pd.DataFrame:
+    """Drop rows whose recorded ``depth`` contradicts their ``x``/``y``/``z`` geometry.
+
+    ``depth`` is *defined* as ``2*z / (x + y) * 100``. A recorded value that
+    disagrees with that formula by more than ``tolerance_pp`` percentage points
+    is an internally inconsistent record (e.g. a mistyped dimension), not a
+    real stone, so it is removed before the feature table is built. Every
+    individual value in such a row can still sit inside its own documented
+    range, which is why :func:`apply_domain_bounds` does not catch it.
+
+    Args:
+        df: Table with numeric ``depth``/``x``/``y``/``z`` and no missing
+            values in those columns. Not mutated.
+        tolerance_pp: Allowed absolute disagreement, in percentage points.
+
+    Returns:
+        A copy without the inconsistent rows, index reset.
+    """
+    disagreement = (df["depth"] - implied_depth_percentage(df)).abs()
+    return df.loc[disagreement <= tolerance_pp].reset_index(drop=True)
+
+
 def add_volume_feature(df: pd.DataFrame) -> pd.DataFrame:
     """Add ``volume = x * y * z``.
 
@@ -206,13 +252,14 @@ def build_features(raw_df: pd.DataFrame) -> pd.DataFrame:
 
     Returns:
         The model-ready feature table: columns :data:`FEATURE_TABLE_COLUMNS`,
-        no missing values, no duplicates, dtypes per
-        :data:`FEATURE_TABLE_DTYPES`.
+        no missing values, no duplicates, no geometry-inconsistent rows, dtypes
+        per :data:`FEATURE_TABLE_DTYPES`.
     """
     df = coerce_numeric_columns(raw_df)
     df = restrict_categorical_columns(df)
     df = apply_domain_bounds(df)
     df = drop_invalid_rows(df)
+    df = drop_geometry_inconsistent_rows(df)
     df = add_volume_feature(df)
     df = df[FEATURE_TABLE_COLUMNS]
     return cast_feature_dtypes(df)

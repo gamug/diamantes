@@ -31,6 +31,7 @@ from pathlib import Path
 import pandas as pd
 
 from diamond_features import build_features
+from feature_validation import validate_features
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,11 @@ def run_feature_pipeline(
 
     Returns:
         The feature table that was written (also handy for tests / notebooks).
+
+    Raises:
+        feature_validation.FeatureValidationError: If the built features fail a
+            data-quality or integrity rule. The exception propagates before
+            :func:`save_features` is reached, so nothing is written.
     """
     logger.info("Loading raw data from %s", raw_csv_path)
     raw_df = load_raw_data(raw_csv_path)
@@ -95,6 +101,9 @@ def run_feature_pipeline(
         features.shape[1],
         dropped,
     )
+
+    validate_features(features)
+    logger.info("Feature table passed all data-quality and integrity checks")
 
     save_features(features, output_path)
     logger.info("Wrote feature table to %s", output_path)

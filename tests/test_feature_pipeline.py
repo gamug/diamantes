@@ -17,6 +17,7 @@ from feature_pipeline import (
     run_feature_pipeline,
     save_features,
 )
+from feature_validation import FeatureValidationError, validate_features
 
 RAW_COLUMNS = ["carat", "cut", "color", "clarity", "depth", "table", "price", "x", "y", "z"]
 
@@ -120,6 +121,28 @@ def test_run_feature_pipeline_writes_and_returns_feature_table(
     pd.testing.assert_frame_equal(pd.read_parquet(out_path), returned)
 
 
+def test_run_feature_pipeline_does_not_persist_when_validation_fails(
+    tmp_path: Path, raw_df: pd.DataFrame, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csv_path = tmp_path / "01_raw" / "diamantes.csv"
+    csv_path.parent.mkdir(parents=True)
+    raw_df.to_csv(csv_path, index=False)
+    out_path = tmp_path / "04_feature" / "diamantes_features.parquet"
+
+    # build_features returns a table that breaks a range rule -> validation must gate it
+    def _broken_build(_: pd.DataFrame) -> pd.DataFrame:
+        good = build_features(raw_df)
+        good.loc[good.index[0], "carat"] = pd.NA  # forces a null-fraction failure
+        return good
+
+    monkeypatch.setattr(fp, "build_features", _broken_build)
+
+    with pytest.raises(FeatureValidationError):
+        run_feature_pipeline(csv_path, out_path)
+
+    assert not out_path.exists()  # nothing persisted on a failed validation
+
+
 def test_main_invokes_pipeline_once(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
     monkeypatch.setattr(fp, "run_feature_pipeline", lambda: calls.append("ran"))
@@ -140,3 +163,6 @@ def test_pipeline_runs_on_real_dataset() -> None:
     assert (features[PRICE_COLUMN] > 0).all()
     for column, (low, high) in MEASUREMENT_BOUNDS.items():
         assert features[column].between(low, high).all()
+
+    # the real course dataset must satisfy the full validation contract
+    pd.testing.assert_frame_equal(validate_features(features), features)

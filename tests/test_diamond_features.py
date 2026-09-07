@@ -9,6 +9,7 @@ import pytest
 from diamond_features import (
     FEATURE_TABLE_COLUMNS,
     FEATURE_TABLE_DTYPES,
+    GEOMETRY_DEPTH_TOLERANCE_PP,
     MEASUREMENT_BOUNDS,
     PRICE_COLUMN,
     VOLUME_COLUMN,
@@ -17,7 +18,9 @@ from diamond_features import (
     build_features,
     cast_feature_dtypes,
     coerce_numeric_columns,
+    drop_geometry_inconsistent_rows,
     drop_invalid_rows,
+    implied_depth_percentage,
     restrict_categorical_columns,
 )
 
@@ -227,7 +230,71 @@ def test_cast_feature_dtypes_matches_spec() -> None:
         assert str(result[column].dtype) == dtype
 
 
+# --- geometry consistency ------------------------------------------
+
+
+def test_implied_depth_percentage_matches_formula() -> None:
+    df = pd.DataFrame({"x": [6.0], "y": [6.0], "z": [3.6], "depth": [60.0]})
+
+    # 2 * 3.6 / (6.0 + 6.0) * 100 == 60.0
+    assert implied_depth_percentage(df).iloc[0] == pytest.approx(60.0)
+
+
+def test_drop_geometry_inconsistent_rows_removes_impossible_records() -> None:
+    df = pd.DataFrame(
+        {
+            "carat": [1.0, 1.0],
+            "depth": [60.0, 75.0],  # row 1: matches geometry; row 2: implies ~50, off by 25pp
+            "table": [57.0, 57.0],
+            "x": [6.0, 6.0],
+            "y": [6.0, 6.0],
+            "z": [3.6, 3.0],
+        }
+    )
+
+    result = drop_geometry_inconsistent_rows(df)
+
+    assert len(result) == 1
+    assert result["depth"].iloc[0] == pytest.approx(60.0)
+    assert list(result.index) == [0]
+
+
+def test_drop_geometry_inconsistent_rows_keeps_rows_within_tolerance() -> None:
+    df = pd.DataFrame(
+        {
+            "depth": [60.0 + GEOMETRY_DEPTH_TOLERANCE_PP / 2],
+            "x": [6.0],
+            "y": [6.0],
+            "z": [3.6],
+        }
+    )
+
+    assert len(drop_geometry_inconsistent_rows(df)) == 1
+
+
 # --- build_features (end to end, in memory) --------------------
+
+
+def test_build_features_drops_geometry_inconsistent_rows() -> None:
+    good = {
+        "carat": "1.01",
+        "cut": "Ideal",
+        "color": "E",
+        "clarity": "SI2",
+        "depth": "61.5",
+        "table": "55.0",
+        "price": "3204",
+        "x": "6.40",
+        "y": "6.42",
+        "z": "3.95",
+    }
+    # every value in range, but depth (75) contradicts geometry (2*3.0/12.0*100 = 50)
+    inconsistent = {**good, "depth": "75.0", "x": "6.00", "y": "6.00", "z": "3.00"}
+    raw = pd.DataFrame([good, inconsistent], columns=RAW_COLUMNS).astype("object")
+
+    features = build_features(raw)
+
+    assert len(features) == 1
 
 
 def test_build_features_returns_only_clean_rows(raw_df: pd.DataFrame) -> None:
