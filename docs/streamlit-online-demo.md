@@ -82,15 +82,19 @@ Redeploys are automatic on every push to `main`.
 
 The layout borrows the vernacular of a diamond **grading report**: a two-column
 ledger — the stone's attributes on the left, the assessed value on the right,
-separated by a single hairline — under a midnight display-velvet hero band, on a
-cool "colorless-stone" ground (the D–Z colour scale measures *absence* of yellow).
-Two typefaces: **Space Grotesk** for the estimated figure and section titles (the
-number is the product, so it gets the characterful face), **IBM Plex Sans** for
-everything else. The one loud element is the value figure and a single spectral
-"fire" ray beneath it (the dispersion a diamond throws when rotated), which draws
-in once on **Assess value** and is the page's only non-user-triggered motion
-(`prefers-reduced-motion` disables it). Native theme in `.streamlit/config.toml`;
-bespoke pieces in the app's injected `<style>` (`.dpx-*`).
+separated by a single hairline — under a midnight display-velvet hero band. The
+page runs in **dark mode**: a deep blue-black ground (`#0B131E`) with lifted
+slate panels for the field fills, near-white ink, and a spectral cyan for the
+primary action and focus rings. Two typefaces: **Space Grotesk** for the
+estimated figure and section titles (the number is the product, so it gets the
+characterful face), **IBM Plex Sans** for everything else. The one loud element
+is the value figure and a single spectral "fire" ray beneath it (the dispersion
+a diamond throws when rotated), which draws in once on **Assess value** and is
+the page's only non-user-triggered motion (`prefers-reduced-motion` disables
+it). The dark palette is set natively in `.streamlit/config.toml` so Streamlit's
+own widgets (inputs, dropdowns, the submit button) inherit it; the bespoke
+pieces live in the app's injected `<style>` (`.dpx-*`) and deliberately leave
+colour to the base theme wherever it already reads well.
 
 ## Evidence of correct operation
 

@@ -1,11 +1,11 @@
 # Native theme for the online demo (src/streamlit_app.py). The bespoke pieces
 # (hero band, estimated-value figure, prism ray, section rules) are styled in
 # the app's own injected <style>; this sets the palette Streamlit's own widgets
-# pick up: the "colorless-stone" cool white ground, a light mist for field
-# fills, midnight-velvet as the primary (buttons / focus), cool near-black ink.
+# pick up: a deep blue-black ground, a lifted slate panel for field fills, a
+# spectral cyan as the primary (submit button / focus rings), near-white ink.
 [theme]
-base = "light"
-primaryColor = "#0E1B2C"
-backgroundColor = "#F5F7FB"
-secondaryBackgroundColor = "#ECEFF5"
-textColor = "#1B242E"
+base = "dark"
+primaryColor = "#79D2FF"
+backgroundColor = "#0B131E"
+secondaryBackgroundColor = "#152232"
+textColor = "#EBF1F8"

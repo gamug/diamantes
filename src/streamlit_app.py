@@ -13,7 +13,7 @@ small (`streamlit`, `pandas`, `numpy`, `scikit-learn`, `joblib` — no `deepchec
 
 The layout follows a grading report: a two-column ledger (the stone's
 attributes | the assessed value) under a midnight display-velvet hero band,
-on a cool "colorless-stone" ground. The estimated figure and a single
+on a deep blue-black ground (dark mode). The estimated figure and a single
 spectral "fire" ray beneath it are the one loud element.
 
 Run locally:
@@ -153,10 +153,13 @@ def input_warnings(*, carat: float, depth: float, x: float, y: float, z: float) 
 
 # --- visual design ---------------------------------------------------
 # Grounded in the grading-report vernacular: a two-column ledger (the stone's
-# attributes | the assessed value), a "colorless-stone" cool-white ground, a
+# attributes | the assessed value), a deep blue-black ground (dark mode), a
 # midnight display-velvet hero band, and a single spectral "fire" ray -- the
 # one loud element -- under the estimated figure. Space Grotesk carries the
-# number (it is the product); IBM Plex Sans carries everything else.
+# number (it is the product); IBM Plex Sans carries everything else. Colour is
+# left to Streamlit's own dark theme wherever a widget already reads well
+# (the primary submit button, dropdown popovers), so the injected CSS stays
+# thin and never fights the base theme -- see .streamlit/config.toml.
 
 _FACET_MARK = """
 <svg class="dpx-mark" viewBox="0 0 64 64" role="img" aria-label="Round brilliant, top view">
@@ -172,33 +175,43 @@ _STYLE = """
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 :root{
-  --colorless:#F5F7FB; --mist:#ECEFF5; --line:#D7DDE7;
-  --velvet:#0E1B2C; --velvet-2:#16283E;
-  --ink:#1B242E; --slate:#3C4551; --graphite:#5C6470;
+  --ground:#0B131E; --panel:#152232; --panel-2:#1B2B3F; --line:#2A3A4E;
+  --velvet:#101F33; --velvet-edge:#28405C;
+  --ink:#EBF1F8; --slate:#B4C2D3; --graphite:#8291A5;
   --sans:'IBM Plex Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --figure:'Space Grotesk','IBM Plex Sans',ui-sans-serif,system-ui,sans-serif;
   --prism:linear-gradient(93deg,#79D2FF 0%,#B7A6FF 52%,#FFB1C6 100%);
 }
 
-[data-testid="stAppViewContainer"]{background:var(--colorless);}
+/* keep Streamlit's Material (ligature) icons rendering as glyphs -- a broad
+   font-family override used to leak into them and print the raw ligature name
+   (e.g. "arrow_right") on top of the label. */
+[data-testid="stIconMaterial"],
+span[class*="material-symbols"], span[class*="material-icons"]{
+  font-family:'Material Symbols Rounded','Material Symbols Outlined','Material Icons' !important;
+}
+
+[data-testid="stAppViewContainer"]{background:var(--ground);}
 [data-testid="stHeader"]{background:transparent;}
 [data-testid="stToolbar"]{right:.5rem;}
-.stApp, .stApp p, .stApp li, .stApp label, .stApp span{font-family:var(--sans);color:var(--ink);}
+.stApp{font-family:var(--sans);color:var(--ink);}
+.stApp p, .stApp li, .stApp label{font-family:var(--sans);color:var(--ink);}
 .block-container{max-width:1140px;padding-top:1.4rem;padding-bottom:3rem;}
 .stApp [data-testid="stMainBlockContainer"]{padding-top:1.4rem;}
 
 /* hero band -------------------------------------------------------- */
 .dpx-hero{
-  background:var(--velvet);color:#fff;border-radius:14px;
+  background:linear-gradient(150deg,var(--velvet) 0%,#0A1723 100%);
+  color:#fff;border:1px solid var(--velvet-edge);border-radius:14px;
   padding:2.1rem 2.3rem;display:flex;gap:1.5rem;align-items:flex-start;
   margin:.2rem 0 1.9rem;
 }
 .dpx-mark{width:60px;height:60px;flex:none;margin-top:.15rem;
-  fill:none;stroke:rgba(255,255,255,.55);stroke-width:1;}
+  fill:none;stroke:rgba(190,220,255,.5);stroke-width:1;}
 .dpx-hero h1{font-family:var(--figure);font-weight:600;font-size:2rem;
   letter-spacing:-.015em;line-height:1.05;margin:0 0 .5rem;color:#fff;}
 .dpx-hero p{font-family:var(--sans);font-size:1.02rem;line-height:1.5;
-  color:rgba(255,255,255,.72);margin:0;max-width:52ch;}
+  color:rgba(220,230,242,.72);margin:0;max-width:52ch;}
 
 /* section titles = report headers -------------------------------- */
 .dpx-h{font-family:var(--figure);font-weight:600;font-size:1.02rem;
@@ -223,19 +236,27 @@ _STYLE = """
   font-weight:500;margin-bottom:.25rem;}
 [data-testid="stNumberInput"] input,
 [data-baseweb="select"] > div{
-  background:var(--mist);border:1px solid var(--line);border-radius:7px;
-  font-variant-numeric:tabular-nums;
+  background:var(--panel);border:1px solid var(--line);border-radius:7px;
+  color:var(--ink);font-variant-numeric:tabular-nums;
 }
 [data-testid="stNumberInput"] input:focus,
 [data-baseweb="select"] > div:focus-within{
-  border-color:var(--velvet);box-shadow:0 0 0 3px rgba(14,27,44,.13);outline:none;
+  border-color:#79D2FF;box-shadow:0 0 0 3px rgba(121,210,255,.16);outline:none;
 }
+/* number-input +/- steppers */
+[data-testid="stNumberInput"] button{
+  background:var(--panel);border:1px solid var(--line);color:var(--slate);
+}
+[data-testid="stNumberInput"] button:hover{background:var(--panel-2);color:var(--ink);}
+
+/* submit button: shape + type only -- colour is the (dark) base theme's
+   primary style, which already reads well and keeps the label legible. */
 [data-testid="stFormSubmitButton"] button{
-  font-family:var(--figure);font-weight:600;border-radius:7px;border:0;
-  background:var(--velvet);color:#fff;padding:.6rem 1rem;margin-top:.4rem;
-  transition:background .12s ease,transform .06s ease;
+  font-family:var(--figure);font-weight:600;border-radius:8px;
+  padding:.62rem 1rem;margin-top:.4rem;
+  transition:filter .12s ease,transform .06s ease;
 }
-[data-testid="stFormSubmitButton"] button:hover{background:var(--velvet-2);}
+[data-testid="stFormSubmitButton"] button:hover{filter:brightness(1.08);}
 [data-testid="stFormSubmitButton"] button:active{transform:translateY(1px);}
 
 /* assessed value: the one loud element ------------------------- */
@@ -248,6 +269,7 @@ _STYLE = """
   color:var(--ink);font-variant-numeric:tabular-nums;}
 .dpx-value__ray{display:block;height:3px;width:min(100%,320px);border-radius:2px;
   margin:.9rem 0 1.05rem;background:var(--prism);transform-origin:left;
+  box-shadow:0 0 18px rgba(121,210,255,.22);
   animation:dpx-draw .62s cubic-bezier(.2,.7,.2,1) both;}
 .dpx-value__range{display:block;font-family:var(--sans);font-size:1.02rem;
   color:var(--slate);}
@@ -262,10 +284,11 @@ _STYLE = """
   color:var(--slate);font-size:.9rem;line-height:1.5;margin:.55rem 0;}
 
 /* expander + dataframe ---------------------------------------- */
-[data-testid="stExpander"] summary{font-family:var(--sans);color:var(--graphite);
-  font-size:.9rem;}
 [data-testid="stExpander"]{border:1px solid var(--line);border-radius:8px;
-  background:transparent;margin-top:1.1rem;}
+  background:var(--panel);margin-top:1.1rem;}
+[data-testid="stExpander"] summary p{font-family:var(--sans);color:var(--slate);
+  font-size:.9rem;}
+[data-testid="stExpander"] summary:hover p{color:var(--ink);}
 [data-testid="stDataFrame"]{font-variant-numeric:tabular-nums;}
 
 .dpx-foot{font-family:var(--sans);font-size:.82rem;color:var(--graphite);
