@@ -100,28 +100,22 @@ app was created (they apply equally to `#37` and `#38`).
 1. Go to <https://share.streamlit.io> and **sign in with GitHub** using the
    account that owns `gamug/diamantes`; authorise the Streamlit Community Cloud
    app when GitHub prompts.
-2. Click **Create app** (top-right). When asked *“Do you already have an app?”*
-   choose **“Yup, I have an app”** → **Deploy a public app from GitHub**.
-3. Fill the **Deploy an app** form with exactly these values:
+2. Click **Create app** → **Deploy a public app from GitHub**.
+3. Fill the form with **exactly these values**:
 
-   | Field | Value |
+   | Form field | Value to enter |
    | --- | --- |
    | **Repository** | `gamug/diamantes` |
    | **Branch** | `main` |
    | **Main file path** | `src/streamlit_app.py` |
-   | **App URL** (subdomain) | `diamantes-model` → gives `https://diamantes-model.streamlit.app` |
+   | **App URL** *(optional)* | a `diamantes-…` subdomain of your choice — this deployment uses `diamantes-model`, giving <https://diamantes-model.streamlit.app/> |
 
-4. Open **Advanced settings…** and set:
-
-   | Field | Value |
-   | --- | --- |
-   | **Python version** | `3.12` |
-   | **Secrets** | *(leave empty — the app needs none)* |
-
-5. Click **Deploy!**. The first build runs `pip install -r requirements.txt` and
-   takes a few minutes; when it finishes the app is live at the URL from step 3.
-   `streamlit run` puts `src/` on `sys.path`, so the flat `src/` modules import
-   by bare name.
+4. *(optional)* **Advanced settings…** → **Python version** `3.12`; leave
+   **Secrets** empty — the app needs none.
+5. Click **Deploy**. The first build runs `pip install -r requirements.txt` and
+   takes a few minutes; when it finishes the app is live at the App URL from
+   step 3. `streamlit run` puts `src/` on `sys.path`, so the flat `src/` modules
+   import by bare name.
 
 ### After the first deploy
 

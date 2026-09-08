@@ -53,26 +53,27 @@ once, from the `main` branch, and redeploys automatically on every push.
    Cloud has no build step to produce it.
 2. Sign in at <https://share.streamlit.io> with the GitHub account that owns
    `gamug/diamantes`; authorise the Streamlit Community Cloud GitHub app.
-3. **Create app → “Yup, I have an app” → Deploy a public app from GitHub**, and
-   fill the form with exactly:
+3. Click **Create app** → **Deploy a public app from GitHub**, and fill the form
+   with **exactly these values**:
 
-   | Field | Value |
+   | Form field | Value to enter |
    | --- | --- |
    | **Repository** | `gamug/diamantes` |
    | **Branch** | `main` |
    | **Main file path** | `src/streamlit_app.py` |
-   | **App URL** (subdomain) | `diamantes-model` → `https://diamantes-model.streamlit.app` |
+   | **App URL** *(optional)* | a `diamantes-…` subdomain of your choice — this deployment uses `diamantes-model`, giving <https://diamantes-model.streamlit.app/> |
 
-4. **Advanced settings…** → **Python version** `3.12`; leave **Secrets** empty
-   (the app needs none).
-5. **Deploy!** The first build installs [`requirements.txt`](../requirements.txt)
-   — a minimal, pinned subset of the project deps (`streamlit`, `pandas`,
-   `numpy`, `scikit-learn`, `scipy`, `joblib`; **no** `deepchecks` /
-   `matplotlib`). `streamlit run` puts `src/` on `sys.path`, so the flat `src/`
-   modules import by bare name. First build takes a few minutes.
+4. *(optional)* **Advanced settings…** → **Python version** `3.12`; leave
+   **Secrets** empty — the app needs none.
+5. Click **Deploy**. The first build installs
+   [`requirements.txt`](../requirements.txt) — a minimal, pinned subset of the
+   project deps (`streamlit`, `pandas`, `numpy`, `scikit-learn`, `scipy`,
+   `joblib`; **no** `deepchecks` / `matplotlib`). `streamlit run` puts `src/` on
+   `sys.path`, so the flat `src/` modules import by bare name. First build takes
+   a few minutes.
 
-Redeploys are automatic on every push to `main`. Full field-by-field notes,
-including the batch tab, are in
+Redeploys are automatic on every push to `main`. The same field-by-field notes,
+plus the batch tab, are in
 [`streamlit-batch-demo.md`](./streamlit-batch-demo.md#deployment--streamlit-community-cloud).
 
 ## Limitations & expected behaviour
