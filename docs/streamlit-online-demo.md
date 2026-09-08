@@ -81,7 +81,7 @@ Local run of the app's prediction path against the committed model
 
 | Input | Estimate | Rough range | Warning |
 | --- | --- | --- | --- |
-| 1.0 ct · Ideal · G · VS1 · 61.8/56 · 6.40/6.42/3.97 | **$6,781** | $6,277 – $7,285 | — |
+| pristine form defaults (1.0 ct · Ideal · G · VS2 · 61.8/57 · 6.40/6.42/3.97) | **$6,310** | $5,843 – $6,777 | — |
 | 2.0 ct · Premium · F · VS2 · 62.0/58 · 8.10/8.05/5.00 | **$17,893** | $16,562 – $19,223 | — |
 | 0.5 ct · Fair · J · I1 · 64.0/58 · 5.00/5.00/3.20 | **$836** | $774 – $898 | carat 0.50 is below 1.0 ct — extrapolation |
 

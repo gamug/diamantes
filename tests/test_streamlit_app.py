@@ -72,6 +72,18 @@ def test_build_input_row_is_one_text_row() -> None:
     assert all(isinstance(value, str) for value in row.iloc[0])
 
 
+def test_build_input_row_rejects_a_missing_field() -> None:
+    partial = {key: value for key, value in _BASE_FIELDS.items() if key != "carat"}
+
+    with pytest.raises(ValueError, match="missing or empty input fields"):
+        build_input_row(partial)
+
+
+def test_build_input_row_rejects_a_blank_field() -> None:
+    with pytest.raises(ValueError, match="missing or empty input fields"):
+        build_input_row({**_BASE_FIELDS, "clarity": "  "})
+
+
 def test_prepare_features_returns_clean_model_columns() -> None:
     features = prepare_features(_row())
 

@@ -65,17 +65,19 @@ CARAT_EXTRAPOLATION_FLOOR: float = 1.0
 #: Warn if the entered depth disagrees with the x/y/z geometry by more than this.
 GEOMETRY_WARN_TOLERANCE_PP: float = 2.0
 
-#: Sensible mid-market defaults for the form.
+#: Sensible mid-market defaults for the form: a ~1 ct round-brilliant Ideal
+#: stone whose dimensions are consistent with the entered depth, so the
+#: pristine form triggers neither the extrapolation nor the geometry warning.
 _DEFAULTS: dict[str, float | str] = {
-    "carat": 0.9,
+    "carat": 1.0,
     "cut": "Ideal",
     "color": "G",
     "clarity": "VS2",
     "depth": 61.8,
     "table": 57.0,
-    "x": 6.0,
-    "y": 6.0,
-    "z": 3.7,
+    "x": 6.40,
+    "y": 6.42,
+    "z": 3.97,
 }
 _DECIMALS: dict[str, int] = {"carat": 2, "depth": 1, "table": 1, "x": 2, "y": 2, "z": 2}
 
@@ -92,14 +94,19 @@ def build_input_row(fields: dict[str, float | str]) -> pd.DataFrame:
     """One raw-shaped row (text cells, like a CSV line) for the transformation.
 
     Args:
-        fields: One value per name in :data:`RAW_INPUT_COLUMNS`.
+        fields: One non-empty value per name in :data:`RAW_INPUT_COLUMNS`.
 
     Raises:
-        ValueError: If ``fields`` is missing a required raw column.
+        ValueError: If a required raw column is absent, ``None`` or blank -- an
+            incomplete input must be rejected, not silently imputed and scored.
     """
-    missing = [column for column in RAW_INPUT_COLUMNS if column not in fields]
+    missing = [
+        column
+        for column in RAW_INPUT_COLUMNS
+        if fields.get(column) is None or str(fields.get(column)).strip() == ""
+    ]
     if missing:
-        raise ValueError(f"missing input fields: {missing}")
+        raise ValueError(f"missing or empty input fields: {missing}")
     return pd.DataFrame(
         [{column: str(fields[column]) for column in RAW_INPUT_COLUMNS}], columns=RAW_INPUT_COLUMNS
     )
