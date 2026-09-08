@@ -1,0 +1,14 @@
+# Runtime dependencies for the Streamlit online demo (src/streamlit_app.py) on
+# Streamlit Community Cloud. The project itself is uv-managed (pyproject.toml /
+# uv.lock); this file exists only because Streamlit Cloud installs from a
+# requirements.txt. Versions are pinned to the uv.lock resolution so the
+# deployed app matches local runs. Keep in sync when the lock changes.
+#
+# The app imports only `streamlit_app` -> `diamond_features` (+ joblib to load
+# the model), so it does NOT need deepchecks / matplotlib / pandera / mlflow.
+streamlit==1.62.0
+pandas==2.3.3
+numpy==2.3.5
+scikit-learn==1.9.0
+scipy==1.16.3
+joblib==1.5.3

@@ -352,6 +352,20 @@ engineering **upstream** in `diamond_features` instead of inside a pickled `Func
 plain `joblib.load` and no helper redefinition. It writes to the **same path** as the notebook artifact
 (`data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib`), overwriting it.
 
+### Online demo — Streamlit ([`src/streamlit_app.py`](src/streamlit_app.py))
+
+A web form for **online inference** (one diamond → estimated price), wrapping the FTI transformation from
+`diamond_features` and the trained model. Numeric fields are clamped to the documented ranges; the result
+shows the point estimate, a rough `± test-MAPE` band, and warnings for sub-1 ct (extrapolation) or
+inconsistent geometry.
+
+```bash
+uv run streamlit run src/streamlit_app.py
+```
+
+Deployment steps, usage instructions, limitations and evidence: **[`docs/streamlit-online-demo.md`](docs/streamlit-online-demo.md)**.
+`requirements.txt` at the repo root pins the minimal deps for Streamlit Community Cloud.
+
 ## 🗺️ Roadmap
 
 The `src/` FTI pipeline scripts (issues #22–#27) are complete. Stage `8-reports` has not been started yet.
