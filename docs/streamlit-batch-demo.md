@@ -9,7 +9,7 @@ deployment, one model, two modes.
 - **Model:** `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib` (committed)
 - **Example input:** [`data/01_raw/diamantes_batch_sample.csv`](../data/01_raw/diamantes_batch_sample.csv) (18 rows)
 - **Example output:** [`data/07_model_output/diamantes_batch_sample_predictions.csv`](../data/07_model_output/diamantes_batch_sample_predictions.csv)
-- **Live app:** _add the Streamlit Community Cloud URL here after deploying_ (same URL as the online demo, tab 2)
+- **Live app:** <https://diamantes-model.streamlit.app/> — open the **“A file of stones”** tab (same deployment as the online demo)
 
 ## How batch mode works
 
@@ -77,24 +77,61 @@ uv run python src/inference_pipeline.py
 
 ## Deployment — Streamlit Community Cloud
 
-Same app, same deployment as the online demo — nothing extra to configure:
+The batch tab needs **no separate deployment** — it is the same
+`src/streamlit_app.py`, so the app already live at
+<https://diamantes-model.streamlit.app/> gains the *“A file of stones”* tab on
+the next push to `main`. The steps below are the full record of how that one
+app was created (they apply equally to `#37` and `#38`).
 
-1. Repo on GitHub with the model artifact committed at
-   `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib` **and** the
-   example input at `data/01_raw/diamantes_batch_sample.csv` (the app serves it
-   as the *Download a sample CSV* button).
-2. On <https://share.streamlit.io>: **Repository** `gamug/diamantes`,
-   **Branch** `main`, **Main file path** `src/streamlit_app.py`, Python 3.12.
-3. Dependencies come from [`requirements.txt`](../requirements.txt) — unchanged
-   for batch (`streamlit`, `pandas`, `numpy`, `scikit-learn`, `scipy`,
-   `joblib`); the batch view charts with native `st.scatter_chart`, so no
-   plotting library is added.
-4. **Deploy.** Redeploys are automatic on every push to `main`. Paste the
-   `https://<subdomain>.streamlit.app` URL into **Live app** above and into
-   issue #38.
+### Prerequisites (already in the repo)
 
-Default upload cap on Streamlit Community Cloud is 200 MB per file — far above
-the ~53 k-row course dataset.
+- `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib` — the trained
+  model, committed (Streamlit Cloud has no build step to produce it).
+- `data/01_raw/diamantes_batch_sample.csv` — the example input, committed; the
+  app reads it from disk to power the *Download a sample CSV* button.
+- `requirements.txt` at the repo root — the exact, pinned runtime deps Streamlit
+  Cloud installs (`streamlit`, `pandas`, `numpy`, `scikit-learn`, `scipy`,
+  `joblib`). No `deepchecks` / `matplotlib`: the batch view charts with native
+  `st.scatter_chart`.
+- `.streamlit/config.toml` — the dark theme; picked up automatically.
+
+### One-time setup on share.streamlit.io
+
+1. Go to <https://share.streamlit.io> and **sign in with GitHub** using the
+   account that owns `gamug/diamantes`; authorise the Streamlit Community Cloud
+   app when GitHub prompts.
+2. Click **Create app** (top-right). When asked *“Do you already have an app?”*
+   choose **“Yup, I have an app”** → **Deploy a public app from GitHub**.
+3. Fill the **Deploy an app** form with exactly these values:
+
+   | Field | Value |
+   | --- | --- |
+   | **Repository** | `gamug/diamantes` |
+   | **Branch** | `main` |
+   | **Main file path** | `src/streamlit_app.py` |
+   | **App URL** (subdomain) | `diamantes-model` → gives `https://diamantes-model.streamlit.app` |
+
+4. Open **Advanced settings…** and set:
+
+   | Field | Value |
+   | --- | --- |
+   | **Python version** | `3.12` |
+   | **Secrets** | *(leave empty — the app needs none)* |
+
+5. Click **Deploy!**. The first build runs `pip install -r requirements.txt` and
+   takes a few minutes; when it finishes the app is live at the URL from step 3.
+   `streamlit run` puts `src/` on `sys.path`, so the flat `src/` modules import
+   by bare name.
+
+### After the first deploy
+
+- **Redeploys are automatic** on every push to the `main` branch — no action
+  needed for the batch tab beyond merging its PR.
+- Manage / reboot / view logs from the app's **⋮ menu** on
+  <https://share.streamlit.io>.
+- The default upload cap is **200 MB per file** — far above the ~53 k-row course
+  dataset; raise it with `[server] maxUploadSize` in `.streamlit/config.toml`
+  only if ever needed.
 
 ## Limitations & expected behaviour
 

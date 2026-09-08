@@ -8,7 +8,7 @@ stones”** tab does batch inference — see
 
 - **App:** [`src/streamlit_app.py`](../src/streamlit_app.py)
 - **Model:** `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib` (committed)
-- **Live app:** _add the Streamlit Community Cloud URL here after deploying_
+- **Live app:** <https://diamantes-model.streamlit.app/> (**“One stone”** tab)
 
 ## Usage instructions (end users)
 
@@ -45,24 +45,35 @@ run `uv run python src/training_pipeline.py` first.
 
 ## Deployment — Streamlit Community Cloud
 
-1. Push this repo to GitHub (already done) with the model artifact committed at
-   `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib`.
-2. Sign in at <https://share.streamlit.io> with the GitHub account that owns the repo.
-3. **New app → From existing repo** and set:
-   - **Repository:** `gamug/diamantes`
-   - **Branch:** `main`
-   - **Main file path:** `src/streamlit_app.py`
-   - **Python version:** 3.12 (Advanced settings)
-4. Streamlit Cloud installs from [`requirements.txt`](../requirements.txt) — a
-   minimal, pinned subset of the project dependencies (the app needs only
-   `streamlit`, `pandas`, `numpy`, `scikit-learn`, `scipy`, `joblib`; it does
-   **not** import `deepchecks` / `matplotlib`). `streamlit run` puts `src/` on
-   `sys.path`, so the flat `src/` modules import by bare name.
-5. **Deploy.** First build takes a few minutes; afterwards the app is reachable at
-   a stable `https://<subdomain>.streamlit.app` URL. Paste that URL into
-   **Live app** above and into the PR / issue #37.
+The app is deployed at <https://diamantes-model.streamlit.app/>. It was created
+once, from the `main` branch, and redeploys automatically on every push.
 
-Redeploys are automatic on every push to `main`.
+1. Push this repo to GitHub (done) with the model artifact committed at
+   `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib` — Streamlit
+   Cloud has no build step to produce it.
+2. Sign in at <https://share.streamlit.io> with the GitHub account that owns
+   `gamug/diamantes`; authorise the Streamlit Community Cloud GitHub app.
+3. **Create app → “Yup, I have an app” → Deploy a public app from GitHub**, and
+   fill the form with exactly:
+
+   | Field | Value |
+   | --- | --- |
+   | **Repository** | `gamug/diamantes` |
+   | **Branch** | `main` |
+   | **Main file path** | `src/streamlit_app.py` |
+   | **App URL** (subdomain) | `diamantes-model` → `https://diamantes-model.streamlit.app` |
+
+4. **Advanced settings…** → **Python version** `3.12`; leave **Secrets** empty
+   (the app needs none).
+5. **Deploy!** The first build installs [`requirements.txt`](../requirements.txt)
+   — a minimal, pinned subset of the project deps (`streamlit`, `pandas`,
+   `numpy`, `scikit-learn`, `scipy`, `joblib`; **no** `deepchecks` /
+   `matplotlib`). `streamlit run` puts `src/` on `sys.path`, so the flat `src/`
+   modules import by bare name. First build takes a few minutes.
+
+Redeploys are automatic on every push to `main`. Full field-by-field notes,
+including the batch tab, are in
+[`streamlit-batch-demo.md`](./streamlit-batch-demo.md#deployment--streamlit-community-cloud).
 
 ## Limitations & expected behaviour
 
