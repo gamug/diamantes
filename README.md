@@ -6,6 +6,9 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json)](https://github.com/charliermarsh/ruff)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
+[![Streamlit app](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://diamantes-model.streamlit.app/)
+
+> **🚀 Live demo — <https://diamantes-model.streamlit.app/>** &nbsp;·&nbsp; one app, two tabs: *One stone* (online, single-diamond price) and *A file of stones* (batch, CSV upload → downloadable predictions). See [`docs/streamlit-online-demo.md`](docs/streamlit-online-demo.md) and [`docs/streamlit-batch-demo.md`](docs/streamlit-batch-demo.md).
 
 Academic project for the **Módulo de Ciencia de datos en producción**: predict the price of a diamond (`price`, in USD)
 from its physical and quality characteristics (`carat`, `cut`, `color`, `clarity`, `depth`, `table`, `x`, `y`,
