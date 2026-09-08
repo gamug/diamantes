@@ -286,6 +286,21 @@ def test_online_tab_asks_before_pricing_out_of_range_input() -> None:
     assert "dpx-value__figure" not in _html(at)  # not priced yet
 
 
+def test_online_tab_accepts_and_gates_a_value_past_the_documented_maximum() -> None:
+    at = AppTest.from_file(_APP, default_timeout=60).run()
+    over_max = 8.0  # carat's documented max is 5.01
+
+    at.number_input[0].set_value(over_max).run()
+    at.button[0].click().run()
+
+    assert len(at.exception) == 0
+    assert at.number_input[0].value == pytest.approx(over_max)  # widget no longer clamps
+    assert "Estimate anyway" in _oor_labels(at)
+    assert "dpx-value__figure" not in _html(at)
+    at.button(key="oor_go").click().run()
+    assert "dpx-value__figure" in _html(at)  # priced once confirmed
+
+
 def test_online_tab_prices_after_the_user_confirms() -> None:
     at = AppTest.from_file(_APP, default_timeout=60).run()
     at.number_input[0].set_value(0.5).run()

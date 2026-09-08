@@ -20,16 +20,16 @@ the right.
    - **Carat** (0.2–5.01), **Depth %** (43–79), **Table %** (43–95).
    - **Cut / Color / Clarity** — pick a grade (worst → best).
    - **Measurements (mm)** — `x`, `y`, `z` (length, width, depth).
-   - Fields are pre-filled with a typical 1-carat round brilliant. Each numeric
-     field is clamped to the range in `data/01_raw/datos_diamantes_Info.txt`, so an
-     out-of-range value can't be submitted.
+   - Fields are pre-filled with a typical 1-carat round brilliant. Numeric
+     fields only block negative numbers — a value **outside** the documented
+     range (see `data/01_raw/datos_diamantes_Info.txt`) can be entered on
+     purpose, so the app can warn about it.
 3. Press **Assess value**.
-   - If any input is outside the range the model was trained on (sub-1 ct, a
-     `depth` that contradicts `x/y/z`, or — should the bounds ever be relaxed —
-     a value past its documented min/max), a dialog lists the problems and asks
-     to confirm: **Estimate anyway** runs the model; **Go back** holds the
-     result until you adjust the inputs (or press **Assess value** again to
-     confirm).
+   - If any input is outside the range the model can be trusted on — a value
+     past its documented min/max (e.g. carat `8.0`), a sub-1 ct stone, or a
+     `depth` that contradicts `x/y/z` — a dialog lists the problems and asks to
+     confirm: **Estimate anyway** runs the model; **Go back** holds the result
+     until you adjust the inputs (or press **Assess value** again to confirm).
 4. Read the right panel:
    - **Estimated market value** — the point estimate, in USD.
    - **Likely between $X and $Y** — `estimate ± 7.4 %` (the model's held-out test
@@ -84,12 +84,15 @@ plus the batch tab, are in
 
 ## Limitations & expected behaviour
 
-- **Out-of-range inputs are gated.** Sub-1 ct stones (the training data's carat
-  floor is ~1.0 ct — see `notebooks/2-exploration`), a `depth` that disagrees
-  with `2·z / (x + y) · 100` by more than 2 percentage points, or a value past
-  its documented min/max all trigger a confirmation dialog before the model
-  runs. The estimate is only produced after **Estimate anyway**; the same notes
-  then stay visible beside the result. **Go back** withholds the estimate.
+- **Out-of-range inputs are gated.** The numeric fields accept any non-negative
+  value, so a figure past its documented min/max (`carat` 0.2–5.01, `depth`
+  43–79, `table` 43–95, `x/y/z` within their caps) can be entered. That, a
+  sub-1 ct stone (the training data's carat floor is ~1.0 ct — see
+  `notebooks/2-exploration`), or a `depth` that disagrees with
+  `2·z / (x + y) · 100` by more than 2 percentage points each trigger a
+  confirmation dialog before the model runs. The estimate is only produced
+  after **Estimate anyway**, with the same notes beside it; **Go back**
+  withholds it.
 - **Confirmed out-of-range estimates are still unreliable.** Confirming past the
   dialog does not make the number trustworthy — it just records that you chose
   to see it anyway.

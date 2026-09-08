@@ -412,7 +412,6 @@ def _load_model(path_str: str) -> BaseEstimator:  # pragma: no cover
 
 
 def _number_field(key: str) -> float:  # pragma: no cover
-    low, high = MEASUREMENT_BOUNDS[key]
     decimals = _DECIMALS[key]
     labels = {
         "carat": "Carat",
@@ -422,11 +421,15 @@ def _number_field(key: str) -> float:  # pragma: no cover
         "y": "y",
         "z": "z",
     }
+    # Only a floor of 0 (nothing physical is negative) -- deliberately no upper
+    # bound and no documented-minimum clamp, so a value outside MEASUREMENT_BOUNDS
+    # *can* be entered and the out-of-range confirmation dialog can catch it
+    # (st.number_input would otherwise silently clamp it away). See
+    # `range_warnings` / `_render_online_tab`.
     return float(
         st.number_input(
             labels[key],
-            min_value=float(low),
-            max_value=float(high),
+            min_value=0.0,
             value=float(_DEFAULTS[key]),
             step=10.0**-decimals,
             format=f"%.{decimals}f",
@@ -469,11 +472,12 @@ def _render_notes(notes: list[str]) -> None:  # pragma: no cover
 
 
 # --- online tab: out-of-range confirmation ------------------------
-# st.number_input clamps each field to its MEASUREMENT_BOUNDS, but a value can
-# still be inside those bounds yet outside the range the model was *trained* on
-# (sub-1 ct, or a depth that contradicts x/y/z). Rather than price it silently
-# and only footnote the problem, the tab pops a modal: "Estimate anyway" runs
-# the model, "Go back" holds the result until the inputs are fixed or resubmitted.
+# The numeric fields accept values outside their documented MEASUREMENT_BOUNDS
+# (see _number_field), and a value can also be inside those bounds yet outside
+# the range the model was *trained* on (sub-1 ct, or a depth that contradicts
+# x/y/z). Rather than price such inputs silently and only footnote the problem,
+# the tab pops a modal: "Estimate anyway" runs the model, "Go back" holds the
+# result until the inputs are fixed or resubmitted.
 
 #: Session-state keys for the confirmation handshake.
 _ONLINE_PENDING = "online_pending_fields"
