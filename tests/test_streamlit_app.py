@@ -1,6 +1,7 @@
-"""Unit tests for the :mod:`streamlit_app` online-demo helpers (issue #37).
+"""Unit tests for the :mod:`streamlit_app` online demo (issue #37).
 
-Only the pure logic is tested; the Streamlit UI in ``main()`` is not.
+The pure helpers are covered directly; the rendered page is exercised
+end-to-end with Streamlit's headless ``AppTest`` (no browser).
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from streamlit.testing.v1 import AppTest
 
 from diamond_features import KNOWN_CATEGORIES, MEASUREMENT_BOUNDS
 from streamlit_app import (
@@ -170,7 +172,7 @@ def test_input_warnings_flags_sub_carat_extrapolation() -> None:
 def test_input_warnings_flags_geometry_mismatch() -> None:
     warnings = input_warnings(carat=1.5, depth=75.0, x=6.0, y=6.0, z=3.7)
 
-    assert any("disagrees with the depth implied by x/y/z" in message for message in warnings)
+    assert any("doesn't match what x, y and z imply" in message for message in warnings)
 
 
 def test_input_warnings_clean_for_consistent_input() -> None:
@@ -181,3 +183,48 @@ def test_input_warnings_skips_geometry_when_a_dimension_is_zero() -> None:
     warnings = input_warnings(carat=1.5, depth=90.0, x=0.0, y=6.0, z=3.7)
 
     assert warnings == []
+
+
+# --- the rendered page (headless AppTest) ------------------
+
+
+_APP = str(Path(__file__).parents[1] / "src" / "streamlit_app.py")
+_N_NUMBER_FIELDS = len(RAW_INPUT_COLUMNS) - len(KNOWN_CATEGORIES)  # carat/depth/table/x/y/z
+_N_SELECT_FIELDS = len(KNOWN_CATEGORIES)  # cut/color/clarity
+
+
+def _html(at: AppTest) -> str:
+    return " ".join(str(getattr(block, "body", "")) for block in at.get("html"))
+
+
+def test_page_renders_the_form_without_error() -> None:
+    at = AppTest.from_file(_APP, default_timeout=60).run()
+
+    assert len(at.exception) == 0
+    assert len(at.number_input) == _N_NUMBER_FIELDS
+    assert len(at.selectbox) == _N_SELECT_FIELDS
+    assert "dpx-hero" in _html(at)
+
+
+def test_page_shows_an_estimate_on_submit() -> None:
+    at = AppTest.from_file(_APP, default_timeout=60).run()
+
+    at.button[0].click().run()
+
+    assert len(at.exception) == 0
+    html = _html(at)
+    assert "dpx-value__figure" in html
+    assert "Estimated market value" in html
+    assert len(at.dataframe) == 1  # "What the model used" only renders with an estimate
+
+
+def test_page_surfaces_a_note_for_a_sub_carat_stone() -> None:
+    at = AppTest.from_file(_APP, default_timeout=60).run()
+
+    at.number_input[0].set_value(0.5).run()  # carat is the first number input
+    at.button[0].click().run()
+
+    assert len(at.exception) == 0
+    html = _html(at)
+    assert "dpx-notes" in html
+    assert "extrapolation" in html

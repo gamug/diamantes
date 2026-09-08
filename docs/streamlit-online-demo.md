@@ -10,22 +10,26 @@ characteristics, get an estimated price from the model trained by
 
 ## Usage instructions (end users)
 
+The page is a two-column ledger: **The stone** on the left, **Assessed value** on
+the right.
+
 1. Open the app URL.
-2. Fill in the form:
-   - **Carat** (weight, 0.2–5.01), **Depth %** (43–79), **Table %** (43–95).
-   - **x / y / z** — length, width and depth in millimetres.
-   - **Cut / Color / Clarity** — pick a grade (dropdowns, worst → best).
-   - The fields are pre-filled with a typical mid-market stone, and each numeric
-     field is clamped to the range documented in `data/01_raw/datos_diamantes_Info.txt`,
-     so an out-of-range value cannot be submitted.
-3. Press **Estimate price**.
-4. Read the result:
-   - **Estimated price** — the model's point estimate, in USD.
-   - **Rough range** — `estimate ± 7.4 %` (the model's held-out test MAPE). This
-     is a scale reference, *not* a calibrated prediction interval.
-   - Any **⚠ warnings** about inputs the model handles poorly (see Limitations).
-   - Expand **Model input** to see the row after cleaning + feature engineering
-     (`volume = x·y·z`), i.e. exactly what the model received.
+2. Under **The stone**, fill in the form:
+   - **Carat** (0.2–5.01), **Depth %** (43–79), **Table %** (43–95).
+   - **Cut / Color / Clarity** — pick a grade (worst → best).
+   - **Measurements (mm)** — `x`, `y`, `z` (length, width, depth).
+   - Fields are pre-filled with a typical 1-carat round brilliant. Each numeric
+     field is clamped to the range in `data/01_raw/datos_diamantes_Info.txt`, so an
+     out-of-range value can't be submitted.
+3. Press **Assess value**.
+4. Read the right panel:
+   - **Estimated market value** — the point estimate, in USD.
+   - **Likely between $X and $Y** — `estimate ± 7.4 %` (the model's held-out test
+     MAPE). A guide to scale, *not* a calibrated prediction interval.
+   - Any short **notes** (marked with a left rule) about inputs the model handles
+     poorly — see Limitations.
+   - Expand **What the model used** to see the row after cleaning and feature
+     engineering (`volume = x·y·z`), i.e. exactly what the model received.
 
 ## Run it locally
 
@@ -74,18 +78,36 @@ Redeploys are automatic on every push to `main`.
 - **Online only.** Batch scoring (CSV upload) is out of scope for issue #37 —
   use `uv run python src/inference_pipeline.py` for that.
 
+## Design
+
+The layout borrows the vernacular of a diamond **grading report**: a two-column
+ledger — the stone's attributes on the left, the assessed value on the right,
+separated by a single hairline — under a midnight display-velvet hero band, on a
+cool "colorless-stone" ground (the D–Z colour scale measures *absence* of yellow).
+Two typefaces: **Space Grotesk** for the estimated figure and section titles (the
+number is the product, so it gets the characterful face), **IBM Plex Sans** for
+everything else. The one loud element is the value figure and a single spectral
+"fire" ray beneath it (the dispersion a diamond throws when rotated), which draws
+in once on **Assess value** and is the page's only non-user-triggered motion
+(`prefers-reduced-motion` disables it). Native theme in `.streamlit/config.toml`;
+bespoke pieces in the app's injected `<style>` (`.dpx-*`).
+
 ## Evidence of correct operation
 
-Local run of the app's prediction path against the committed model
-(`PYTHONPATH=src uv run python -c "import streamlit_app as a; ..."`):
+Prediction path against the committed model (`PYTHONPATH=src uv run python -c
+"import streamlit_app as a; ..."`):
 
-| Input | Estimate | Rough range | Warning |
+| Input | Estimated market value | Likely range | Note |
 | --- | --- | --- | --- |
-| pristine form defaults (1.0 ct · Ideal · G · VS2 · 61.8/57 · 6.40/6.42/3.97) | **$6,310** | $5,843 – $6,777 | — |
+| form defaults — 1.0 ct · Ideal · G · VS2 · 61.8/57 · 6.40/6.42/3.97 | **$6,310** | $5,843 – $6,777 | — |
 | 2.0 ct · Premium · F · VS2 · 62.0/58 · 8.10/8.05/5.00 | **$17,893** | $16,562 – $19,223 | — |
-| 0.5 ct · Fair · J · I1 · 64.0/58 · 5.00/5.00/3.20 | **$836** | $774 – $898 | carat 0.50 is below 1.0 ct — extrapolation |
+| 0.5 ct · Fair · J · I1 · 64.0/58 · 5.00/5.00/3.20 | **$836** | $774 – $898 | sub-1 ct — rough extrapolation |
 
-`streamlit run src/streamlit_app.py --server.headless true` starts cleanly and
-`/_stcore/health` returns `ok` (HTTP 200).
+Streamlit's headless `AppTest` (`tests/test_streamlit_app.py`) loads the page,
+renders the 6 number + 3 select fields with no exception, submits the form, and
+asserts the estimated figure and the "What the model used" table appear; a
+sub-carat submission additionally surfaces the extrapolation note.
+`streamlit run … --server.headless true` also starts cleanly (`/_stcore/health` →
+`ok`).
 
-_Add screenshots of the deployed app (form + a successful prediction) here._
+_Add screenshots of the deployed app (the ledger + a completed assessment) here._
