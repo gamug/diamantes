@@ -468,62 +468,170 @@ def _render_notes(notes: list[str]) -> None:  # pragma: no cover
     st.html(f'<ul class="dpx-notes">{items}</ul>')
 
 
-def _render_online_tab(model: BaseEstimator, test_mape: float) -> None:  # pragma: no cover
-    """One-stone form on the left, the assessed value on the right."""
-    stone_col, value_col = st.columns([1.04, 0.96], gap="large")
+# --- online tab: out-of-range confirmation ------------------------
+# st.number_input clamps each field to its MEASUREMENT_BOUNDS, but a value can
+# still be inside those bounds yet outside the range the model was *trained* on
+# (sub-1 ct, or a depth that contradicts x/y/z). Rather than price it silently
+# and only footnote the problem, the tab pops a modal: "Estimate anyway" runs
+# the model, "Go back" holds the result until the inputs are fixed or resubmitted.
 
+#: Session-state keys for the confirmation handshake.
+_ONLINE_PENDING = "online_pending_fields"
+_ONLINE_CONFIRMED = "online_confirmed_signature"
+#: Stored in ``_ONLINE_CONFIRMED`` when the user declines the modal.
+_ONLINE_CANCELLED = "__cancelled__"
+
+#: Human labels for the numeric fields (used in range messages).
+_FIELD_LABELS: dict[str, str] = {"carat": "Carat", "depth": "Depth %", "table": "Table %"}
+
+
+def fields_signature(fields: dict[str, float | str]) -> str:
+    """Order-independent string identity of a set of form inputs."""
+    return json.dumps({key: str(value) for key, value in fields.items()}, sort_keys=True)
+
+
+def range_warnings(fields: dict[str, float | str]) -> list[str]:
+    """Notes for any numeric field sitting outside its documented physical range."""
+    out: list[str] = []
+    for key, (low, high) in MEASUREMENT_BOUNDS.items():
+        raw = fields.get(key)
+        if raw is None or str(raw).strip() == "":
+            continue
+        value = float(raw)
+        if not low <= value <= high:
+            label = _FIELD_LABELS.get(key, key)
+            out.append(f"{label} {value:g} is outside the supported {low:g} to {high:g} range.")
+    return out
+
+
+def submission_warnings(fields: dict[str, float | str]) -> list[str]:
+    """Every reason the given inputs are outside the model's reliable range."""
+    return range_warnings(fields) + input_warnings(
+        carat=float(fields["carat"]),
+        depth=float(fields["depth"]),
+        x=float(fields["x"]),
+        y=float(fields["y"]),
+        z=float(fields["z"]),
+    )
+
+
+@st.dialog("Inputs outside the model's reliable range")
+def _confirm_out_of_range(notes: list[str], signature: str) -> None:  # pragma: no cover
+    st.markdown(
+        "The model can still return a number, but one or more inputs sit outside "
+        "the range it was trained on, so the estimate would be unreliable:"
+    )
+    for note in notes:
+        st.markdown(f"- {note}")
+    go, back = st.columns(2)
+    if go.button("Estimate anyway", type="primary", width="stretch", key="oor_go"):
+        st.session_state[_ONLINE_CONFIRMED] = signature
+        st.rerun()
+    if back.button("Go back", width="stretch", key="oor_back"):
+        st.session_state[_ONLINE_CONFIRMED] = _ONLINE_CANCELLED
+        st.rerun()
+
+
+def _stone_form() -> tuple[dict[str, float | str], bool]:  # pragma: no cover
+    """The left-hand input form; returns the entered fields and the submit state."""
+    st.markdown('<h2 class="dpx-h">The stone</h2>', unsafe_allow_html=True)
+    fields: dict[str, float | str] = {}
+    left, right = st.columns(2)
+    with left:
+        fields["carat"] = _number_field("carat")
+        fields["color"] = _select_field("color")
+        fields["depth"] = _number_field("depth")
+    with right:
+        fields["cut"] = _select_field("cut")
+        fields["clarity"] = _select_field("clarity")
+        fields["table"] = _number_field("table")
+    st.markdown('<p class="dpx-cap">Measurements (mm)</p>', unsafe_allow_html=True)
+    mx, my, mz = st.columns(3)
+    with mx:
+        fields["x"] = _number_field("x")
+    with my:
+        fields["y"] = _number_field("y")
+    with mz:
+        fields["z"] = _number_field("z")
+    submitted = st.form_submit_button("Assess value", type="primary", width="stretch")
+    return fields, submitted
+
+
+_EMPTY_PROMPT = (
+    "<p class=\"dpx-empty\">Enter a stone's details and assess it. You'll get an "
+    "estimated market value with a likely range.</p>"
+)
+_AWAITING_PROMPT = (
+    '<p class="dpx-empty">These inputs are outside the model\'s reliable range. '
+    "Confirm in the dialog to run the estimate anyway.</p>"
+)
+_DECLINED_PROMPT = (
+    '<p class="dpx-empty">Estimate held back — the inputs are outside the model\'s '
+    "reliable range. Adjust them, or press <strong>Assess value</strong> again to confirm.</p>"
+)
+
+
+def _render_online_value(
+    model: BaseEstimator,
+    test_mape: float,
+    pending: dict[str, float | str] | None,
+    notes: list[str],
+    state: str,
+) -> None:  # pragma: no cover
+    """The right-hand panel: a prompt, the confirmation notice, or the estimate."""
+    st.markdown('<h2 class="dpx-h">Assessed value</h2>', unsafe_allow_html=True)
+    prompts = {"empty": _EMPTY_PROMPT, "awaiting": _AWAITING_PROMPT, "declined": _DECLINED_PROMPT}
+    if state in prompts:
+        st.markdown(prompts[state], unsafe_allow_html=True)
+        return
+
+    assert pending is not None  # state == "ready" only when a submission is pending
+    raw_row = build_input_row(pending)
+    price = predict_price(model, raw_row)
+    low, high = price_interval(price, test_mape)
+    _render_estimate(price, low, high, test_mape)
+    _render_notes(notes)
+    with st.expander("What the model used"):
+        model_input = prepare_features(raw_row).iloc[0]
+        st.dataframe(
+            pd.DataFrame(
+                {"feature": model_input.index, "value": model_input.astype(str).to_numpy()}
+            ),
+            hide_index=True,
+            width="stretch",
+        )
+
+
+def _render_online_tab(model: BaseEstimator, test_mape: float) -> None:  # pragma: no cover
+    """One-stone form on the left, the assessed value (with an out-of-range gate) on the right."""
+    stone_col, value_col = st.columns([1.04, 0.96], gap="large")
     with stone_col, st.form("stone", border=False):
-        st.markdown('<h2 class="dpx-h">The stone</h2>', unsafe_allow_html=True)
-        fields: dict[str, float | str] = {}
-        left, right = st.columns(2)
-        with left:
-            fields["carat"] = _number_field("carat")
-            fields["color"] = _select_field("color")
-            fields["depth"] = _number_field("depth")
-        with right:
-            fields["cut"] = _select_field("cut")
-            fields["clarity"] = _select_field("clarity")
-            fields["table"] = _number_field("table")
-        st.markdown('<p class="dpx-cap">Measurements (mm)</p>', unsafe_allow_html=True)
-        mx, my, mz = st.columns(3)
-        with mx:
-            fields["x"] = _number_field("x")
-        with my:
-            fields["y"] = _number_field("y")
-        with mz:
-            fields["z"] = _number_field("z")
-        submitted = st.form_submit_button("Assess value", type="primary", width="stretch")
+        fields, submitted = _stone_form()
+
+    if submitted:
+        st.session_state[_ONLINE_PENDING] = dict(fields)
+        st.session_state.pop(_ONLINE_CONFIRMED, None)  # a new submission must be re-confirmed
+
+    pending: dict[str, float | str] | None = st.session_state.get(_ONLINE_PENDING)
+    notes = submission_warnings(pending) if pending else []
+    signature = fields_signature(pending) if pending else ""
+    confirmed = st.session_state.get(_ONLINE_CONFIRMED)
+    awaiting_confirmation = bool(notes) and confirmed not in (signature, _ONLINE_CANCELLED)
+
+    if not pending:
+        state = "empty"
+    elif awaiting_confirmation:
+        state = "awaiting"
+    elif notes and confirmed == _ONLINE_CANCELLED:
+        state = "declined"
+    else:
+        state = "ready"
 
     with value_col:
-        st.markdown('<h2 class="dpx-h">Assessed value</h2>', unsafe_allow_html=True)
-        if not submitted:
-            st.markdown(
-                "<p class=\"dpx-empty\">Enter a stone's details and assess it. You'll get an "
-                "estimated market value with a likely range.</p>",
-                unsafe_allow_html=True,
-            )
-        else:
-            notes = input_warnings(
-                carat=float(fields["carat"]),
-                depth=float(fields["depth"]),
-                x=float(fields["x"]),
-                y=float(fields["y"]),
-                z=float(fields["z"]),
-            )
-            raw_row = build_input_row(fields)
-            price = predict_price(model, raw_row)
-            low, high = price_interval(price, test_mape)
-            _render_estimate(price, low, high, test_mape)
-            _render_notes(notes)
-            with st.expander("What the model used"):
-                model_input = prepare_features(raw_row).iloc[0]
-                st.dataframe(
-                    pd.DataFrame(
-                        {"feature": model_input.index, "value": model_input.astype(str).to_numpy()}
-                    ),
-                    hide_index=True,
-                    width="stretch",
-                )
+        _render_online_value(model, test_mape, pending, notes, state)
+
+    if awaiting_confirmation:
+        _confirm_out_of_range(notes, signature)
 
 
 def _render_batch_tab(model: BaseEstimator) -> None:  # pragma: no cover

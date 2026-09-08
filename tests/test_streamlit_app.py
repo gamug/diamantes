@@ -26,6 +26,7 @@ from streamlit_app import (
     batch_predict,
     batch_summary,
     build_input_row,
+    fields_signature,
     input_warnings,
     load_sample_batch_csv,
     load_test_mape,
@@ -33,7 +34,9 @@ from streamlit_app import (
     predict_price,
     prepare_features,
     price_interval,
+    range_warnings,
     read_batch_csv,
+    submission_warnings,
 )
 from training_pipeline import build_model_pipeline
 
@@ -232,11 +235,88 @@ def test_page_surfaces_a_note_for_a_sub_carat_stone() -> None:
 
     at.number_input[0].set_value(0.5).run()  # carat is the first number input
     at.button[0].click().run()
+    at.button(key="oor_go").click().run()  # confirm the out-of-range dialog
 
     assert len(at.exception) == 0
     html = _html(at)
     assert "dpx-notes" in html
     assert "extrapolation" in html
+
+
+# --- online tab: out-of-range confirmation ----------------
+
+
+def _oor_labels(at: AppTest) -> list[str]:
+    return [button.label for button in at.button]
+
+
+def test_range_warnings_flags_a_value_past_its_bound() -> None:
+    ok = {**_BASE_FIELDS, "carat": 1.2}
+    assert range_warnings(ok) == []
+
+    flagged = range_warnings({**_BASE_FIELDS, "carat": 9.0, "depth": 40.0})
+    assert any("Carat 9" in note and "0.2" in note for note in flagged)
+    assert any("Depth % 40" in note for note in flagged)
+
+
+def test_submission_warnings_merges_range_and_model_reliability_notes() -> None:
+    notes = submission_warnings({**_BASE_FIELDS, "carat": 0.4})
+
+    assert any("extrapolation" in note for note in notes)  # from input_warnings
+
+
+def test_fields_signature_is_order_independent() -> None:
+    a: dict[str, float | str] = {"carat": 1.0, "cut": "Ideal"}
+    b: dict[str, float | str] = {"cut": "Ideal", "carat": 1.0}
+    c: dict[str, float | str] = {"carat": 1.1, "cut": "Ideal"}
+
+    assert fields_signature(a) == fields_signature(b)
+    assert fields_signature(a) != fields_signature(c)
+
+
+def test_online_tab_asks_before_pricing_out_of_range_input() -> None:
+    at = AppTest.from_file(_APP, default_timeout=60).run()
+
+    at.number_input[0].set_value(0.5).run()  # sub-1 ct -> outside the trained range
+    at.button[0].click().run()
+
+    assert len(at.exception) == 0
+    assert "Estimate anyway" in _oor_labels(at)
+    assert "Go back" in _oor_labels(at)
+    assert "dpx-value__figure" not in _html(at)  # not priced yet
+
+
+def test_online_tab_prices_after_the_user_confirms() -> None:
+    at = AppTest.from_file(_APP, default_timeout=60).run()
+    at.number_input[0].set_value(0.5).run()
+    at.button[0].click().run()
+
+    at.button(key="oor_go").click().run()
+
+    assert len(at.exception) == 0
+    assert "dpx-value__figure" in _html(at)
+
+
+def test_online_tab_withholds_the_estimate_when_the_user_declines() -> None:
+    at = AppTest.from_file(_APP, default_timeout=60).run()
+    at.number_input[0].set_value(0.5).run()
+    at.button[0].click().run()
+
+    at.button(key="oor_back").click().run()
+
+    assert len(at.exception) == 0
+    assert "dpx-value__figure" not in _html(at)
+    assert any("held back" in str(block.value) for block in at.markdown)
+
+
+def test_online_tab_prices_in_range_input_without_a_dialog() -> None:
+    at = AppTest.from_file(_APP, default_timeout=60).run()
+
+    at.button[0].click().run()  # defaults are all in range
+
+    assert len(at.exception) == 0
+    assert "Estimate anyway" not in _oor_labels(at)
+    assert "dpx-value__figure" in _html(at)
 
 
 # --- batch inference (issue #38) --------------------------

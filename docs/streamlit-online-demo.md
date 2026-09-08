@@ -24,6 +24,12 @@ the right.
      field is clamped to the range in `data/01_raw/datos_diamantes_Info.txt`, so an
      out-of-range value can't be submitted.
 3. Press **Assess value**.
+   - If any input is outside the range the model was trained on (sub-1 ct, a
+     `depth` that contradicts `x/y/z`, or — should the bounds ever be relaxed —
+     a value past its documented min/max), a dialog lists the problems and asks
+     to confirm: **Estimate anyway** runs the model; **Go back** holds the
+     result until you adjust the inputs (or press **Assess value** again to
+     confirm).
 4. Read the right panel:
    - **Estimated market value** — the point estimate, in USD.
    - **Likely between $X and $Y** — `estimate ± 7.4 %` (the model's held-out test
@@ -78,12 +84,15 @@ plus the batch tab, are in
 
 ## Limitations & expected behaviour
 
-- **Carat < 1.0 ct is extrapolation.** The training data over-represents larger
-  stones (its carat floor is ~1.0 ct — see `notebooks/2-exploration`), so
-  predictions below that are unreliable; the app shows a warning.
-- **Geometry consistency.** `depth` is *defined* as `2·z / (x + y) · 100`. If the
-  entered `depth` disagrees with the `x/y/z` you typed by more than 2 percentage
-  points, the app warns you to re-check the dimensions (it still predicts).
+- **Out-of-range inputs are gated.** Sub-1 ct stones (the training data's carat
+  floor is ~1.0 ct — see `notebooks/2-exploration`), a `depth` that disagrees
+  with `2·z / (x + y) · 100` by more than 2 percentage points, or a value past
+  its documented min/max all trigger a confirmation dialog before the model
+  runs. The estimate is only produced after **Estimate anyway**; the same notes
+  then stay visible beside the result. **Go back** withholds the estimate.
+- **Confirmed out-of-range estimates are still unreliable.** Confirming past the
+  dialog does not make the number trustworthy — it just records that you chose
+  to see it anyway.
 - **Point estimate, rough band.** The ± band is the model's average test MAPE
   applied symmetrically — it is not a per-prediction confidence interval.
 - **Static model.** The dataset is a one-time course snapshot; the model is not
@@ -121,13 +130,16 @@ Prediction path against the committed model (`PYTHONPATH=src uv run python -c
 | --- | --- | --- | --- |
 | form defaults — 1.0 ct · Ideal · G · VS2 · 61.8/57 · 6.40/6.42/3.97 | **$6,310** | $5,843 – $6,777 | — |
 | 2.0 ct · Premium · F · VS2 · 62.0/58 · 8.10/8.05/5.00 | **$17,893** | $16,562 – $19,223 | — |
-| 0.5 ct · Fair · J · I1 · 64.0/58 · 5.00/5.00/3.20 | **$836** | $774 – $898 | sub-1 ct — rough extrapolation |
+| 0.5 ct · Fair · J · I1 · 64.0/58 · 5.00/5.00/3.20 | **$836** | $774 – $898 | sub-1 ct — confirm the dialog first |
 
 Streamlit's headless `AppTest` (`tests/test_streamlit_app.py`) loads the page,
 renders the 6 number + 3 select fields with no exception, submits the form, and
-asserts the estimated figure and the "What the model used" table appear; a
-sub-carat submission additionally surfaces the extrapolation note.
-`streamlit run … --server.headless true` also starts cleanly (`/_stcore/health` →
-`ok`).
+asserts the estimated figure and the "What the model used" table appear. For an
+out-of-range submission (carat 0.5) it asserts the confirmation dialog opens
+with **Estimate anyway** / **Go back**, that the figure is *not* shown until
+**Estimate anyway** is clicked, and that **Go back** leaves the estimate held
+back. `range_warnings` / `submission_warnings` / `fields_signature` are unit
+tested directly. `streamlit run … --server.headless true` also starts cleanly
+(`/_stcore/health` → `ok`).
 
 *Add screenshots of the deployed app (the ledger + a completed assessment) here.*
