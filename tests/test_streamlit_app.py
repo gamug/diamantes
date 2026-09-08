@@ -293,6 +293,27 @@ def test_batch_predict_rejects_a_file_missing_a_column() -> None:
         batch_predict(_DummyModel(), _batch_frame().drop(columns=["depth"]))
 
 
+def test_batch_predict_rejects_a_header_only_file() -> None:
+    with pytest.raises(ValueError, match="no data rows"):
+        batch_predict(_DummyModel(), _batch_frame(0))
+
+
+def test_batch_predict_rejects_a_reserved_prediction_column() -> None:
+    frame = _batch_frame(2)
+    frame[PREDICTION_COLUMN] = ["1", "2"]
+
+    with pytest.raises(ValueError, match="reserved output name"):
+        batch_predict(_DummyModel(), frame)
+
+
+def test_batch_predict_rejects_a_wholly_unusable_feature_column() -> None:
+    frame = _batch_frame(3)
+    frame["carat"] = "not-a-number"  # every row's carat is junk -> feature all-NaN
+
+    with pytest.raises(ValueError, match="no usable value"):
+        batch_predict(_DummyModel(), frame)
+
+
 def test_batch_predict_still_scores_rows_with_unparseable_cells() -> None:
     n_rows = 2
     frame = _batch_frame(n_rows)
@@ -388,3 +409,13 @@ def test_batch_tab_reports_a_file_that_is_missing_columns() -> None:
 
     assert len(at.exception) == 0
     assert any("missing required columns" in str(error.value) for error in at.error)
+
+
+def test_batch_tab_reports_a_header_only_file_without_crashing() -> None:
+    at = AppTest.from_file(_APP, default_timeout=60).run()
+    header_only = (",".join(RAW_INPUT_COLUMNS) + "\n").encode()
+
+    at.file_uploader[0].upload("empty.csv", header_only, "text/csv").run()
+
+    assert len(at.exception) == 0
+    assert any("no data rows" in str(error.value) for error in at.error)

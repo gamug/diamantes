@@ -21,7 +21,11 @@ as the standalone [`src/inference_pipeline.py`](../src/inference_pipeline.py):
 2. Required columns are checked (`missing_required_columns`): the file must have
    `carat, cut, color, clarity, depth, table, x, y, z`. A `price` column is
    allowed and ignored; any other extra columns are carried through to the
-   output untouched.
+   output untouched. The file is also rejected (with an `st.error`, nothing
+   predicted) if it has **no data rows**, if an input column already uses the
+   reserved name **`predicted_price`**, or if a whole model feature is unusable
+   across every row (e.g. every `carat` unparseable) — that last case would
+   otherwise make the fitted pipeline drop the column and mis-score the batch.
 3. `diamond_features.build_inference_features` fixes types, nulls out
    out-of-range / unknown-category values, and engineers `volume = x·y·z`.
    **Rows are never dropped** — one prediction per input row; bad or missing
@@ -94,10 +98,12 @@ the ~53 k-row course dataset.
 
 ## Limitations & expected behaviour
 
-- **One prediction per row, always.** Rows with unparseable numbers or unknown
-  grades are *not* rejected — the offending cells become `NaN` and the model's
-  imputers fill them, so a messy row still gets a (less reliable) price. Clean
-  the input if you need trustworthy estimates.
+- **One prediction per row, always** — as long as the file itself is usable.
+  Individual bad cells (unparseable numbers, unknown grades) are *not* rejected:
+  they become `NaN`, the model's imputers fill them, and the row still gets a
+  (less reliable) price. What *is* rejected up front, with nothing predicted: a
+  file with no data rows, a `predicted_price` input column, and any model
+  feature that is `NaN` for **every** row.
 - **No prediction interval per row.** The batch view reports point estimates
   only. For the ± band, use the online tab (it applies the model's ±7.4 % test
   MAPE to a single stone).
@@ -142,14 +148,17 @@ Full table: [`data/07_model_output/diamantes_batch_sample_predictions.csv`](../d
 
 - **Pure helpers** — `missing_required_columns` (names absent columns in order),
   `read_batch_csv` (keeps every column as text), `batch_predict` (one row in →
-  one `predicted_price` out, order preserved, extra columns carried, missing
-  column raises, unparseable cells still scored, and an end-to-end run through a
-  real `build_model_pipeline`), `batch_summary`, `batch_chart_data`,
-  `load_sample_batch_csv`, and a round-trip of the committed sample file.
+  one `predicted_price` out, order preserved, extra columns carried, unparseable
+  *cells* still scored, and an end-to-end run through a real
+  `build_model_pipeline`; raises on a missing column, a header-only file, a
+  reserved `predicted_price` input column, or a wholly-unusable feature),
+  `batch_summary`, `batch_chart_data`, `load_sample_batch_csv`, and a round-trip
+  of the committed sample file.
 - **Rendered page (headless `AppTest`)** — the page exposes an *“One stone”* and
   an *“A file of stones”* tab; uploading the sample CSV produces a predictions
   dataframe with a `predicted_price` column and a *Download predictions (CSV)*
-  button; a file missing columns surfaces a *“missing required columns”* error.
+  button; a file missing columns surfaces a *“missing required columns”* error,
+  and a header-only file a *“no data rows”* error (no crash).
 
 ### Deployed app
 

@@ -203,15 +203,29 @@ def batch_predict(model: BaseEstimator, raw_df: pd.DataFrame) -> pd.DataFrame:
 
     Returns:
         ``raw_df`` (index reset) with a float :data:`PREDICTION_COLUMN` column
-        appended -- one prediction per input row, same order.
+        appended -- one prediction per input row, same order. Any other input
+        columns are carried through untouched.
 
     Raises:
-        ValueError: If a required raw column is missing.
+        ValueError: If a required raw column is missing, the file has no data
+            rows, an input column already uses the reserved
+            :data:`PREDICTION_COLUMN` name, or a model feature has no usable
+            value anywhere in the file (which would make the fitted pipeline
+            drop that column and mispredict every row).
     """
     missing = missing_required_columns(raw_df)
     if missing:
         raise ValueError(f"the file is missing required columns: {missing}")
+    if PREDICTION_COLUMN in raw_df.columns:
+        raise ValueError(f"an input column uses the reserved output name: {PREDICTION_COLUMN}")
+    if raw_df.empty:
+        raise ValueError("the file has no data rows")
+
     features = build_inference_features(raw_df)[MODEL_FEATURES]
+    all_null = [column for column in features.columns if features[column].isna().all()]
+    if all_null:
+        raise ValueError(f"these model features have no usable value in the whole file: {all_null}")
+
     predictions = np.asarray(model.predict(features), dtype=float)
     result = raw_df.reset_index(drop=True).copy()
     result[PREDICTION_COLUMN] = predictions
@@ -549,7 +563,11 @@ def _render_batch_tab(model: BaseEstimator) -> None:  # pragma: no cover
         )
         return
 
-    result = batch_predict(model, raw_df)
+    try:
+        result = batch_predict(model, raw_df)
+    except ValueError as exc:
+        st.error(f"Can't price this file: {exc}")
+        return
     summary = batch_summary(result)
 
     st.markdown(f'<p class="dpx-cap">Priced {len(result):,} diamonds</p>', unsafe_allow_html=True)
