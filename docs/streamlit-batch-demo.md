@@ -193,6 +193,6 @@ Full table: [`data/07_model_output/diamantes_batch_sample_predictions.csv`](../d
 
 ### Deployed app
 
-_Add screenshots here: the empty batch tab, a completed run (metrics + table +
+*Add screenshots here: the empty batch tab, a completed run (metrics + table +
 scatter), and the downloaded `diamantes_predictions.csv` opened in a
-spreadsheet._
+spreadsheet.*

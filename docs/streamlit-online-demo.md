@@ -130,4 +130,4 @@ sub-carat submission additionally surfaces the extrapolation note.
 `streamlit run … --server.headless true` also starts cleanly (`/_stcore/health` →
 `ok`).
 
-_Add screenshots of the deployed app (the ledger + a completed assessment) here._
+*Add screenshots of the deployed app (the ledger + a completed assessment) here.*
