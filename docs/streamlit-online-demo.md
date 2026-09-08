@@ -1,8 +1,10 @@
 # Online demo — Streamlit app (issue #37)
 
-A single-page web form for **online inference**: enter one diamond's
-characteristics, get an estimated price from the model trained by
-`src/training_pipeline.py` (issue #24).
+A web form for **online inference**: enter one diamond's characteristics, get an
+estimated price from the model trained by `src/training_pipeline.py` (issue #24).
+It is the **“One stone”** tab of `src/streamlit_app.py`; the **“A file of
+stones”** tab does batch inference — see
+[`streamlit-batch-demo.md`](./streamlit-batch-demo.md) (issue #38).
 
 - **App:** [`src/streamlit_app.py`](../src/streamlit_app.py)
 - **Model:** `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib` (committed)
@@ -75,8 +77,10 @@ Redeploys are automatic on every push to `main`.
 - **Static model.** The dataset is a one-time course snapshot; the model is not
   retrained on new data. Retraining means re-running `src/training_pipeline.py`
   and committing the new `.joblib`.
-- **Online only.** Batch scoring (CSV upload) is out of scope for issue #37 —
-  use `uv run python src/inference_pipeline.py` for that.
+- **This tab is one stone at a time.** Batch scoring (CSV upload) lives in the
+  **“A file of stones”** tab — see
+  [`streamlit-batch-demo.md`](./streamlit-batch-demo.md) — or run
+  `uv run python src/inference_pipeline.py`.
 
 ## Design
 

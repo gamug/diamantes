@@ -1,15 +1,21 @@
-"""Streamlit online demo: single-diamond price prediction (issue #37).
+"""Streamlit demo: diamond price prediction, online and in batch (issues #37, #38).
 
-A web form for **online inference** — one diamond in, one estimated price out —
-served by the model trained in `training_pipeline.py` (issue #24) and loaded
-from `data/06_models/`.
+Two tabs, one deployed app:
 
-It reuses the exact feature transformation the batch `inference_pipeline.py`
-applies (`diamond_features.build_inference_features`: type-fix, range / category
-validation, `volume = x*y*z`, imputer-friendly `NaN`s), but does **not** import
-`inference_pipeline` itself, so the deployed app's dependency footprint stays
-small (`streamlit`, `pandas`, `numpy`, `scikit-learn`, `joblib` — no `deepchecks`
-/ `matplotlib`).
+* **One stone** — a web form for **online inference**: one diamond in, one
+  estimated price out (issue #37).
+* **A file of stones** — **batch inference** (issue #38): upload a CSV with
+  many rows, every row is priced, and the table of predictions can be
+  downloaded or viewed in place.
+
+Both tabs are served by the model trained in `training_pipeline.py` (issue #24,
+loaded from `data/06_models/`) and reuse the exact feature transformation the
+batch `inference_pipeline.py` applies (`diamond_features.build_inference_features`:
+type-fix, range / category validation, `volume = x*y*z`, imputer-friendly
+`NaN`s). The app does **not** import `inference_pipeline` itself, so the deployed
+footprint stays small (`streamlit`, `pandas`, `numpy`, `scikit-learn`, `scipy`,
+`joblib` — no `deepchecks` / `matplotlib`); the batch view charts with native
+`st.scatter_chart`.
 
 The layout follows a grading report: a two-column ledger (the stone's
 attributes | the assessed value) under a midnight display-velvet hero band,
@@ -20,7 +26,8 @@ Run locally:
 
     uv run streamlit run src/streamlit_app.py
 
-Deploy: see `docs/streamlit-online-demo.md`.
+Deploy: see `docs/streamlit-online-demo.md` (online) and
+`docs/streamlit-batch-demo.md` (batch).
 """
 
 from __future__ import annotations
@@ -28,6 +35,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 from joblib import load
@@ -46,11 +54,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = REPO_ROOT / "data" / "06_models" / "diamantes_price-hist_gradient_boosting-v1.joblib"
 #: Written by ``training_pipeline.py``; may be absent on a fresh checkout.
 METRICS_PATH = REPO_ROOT / "data" / "08_reporting" / "training_metrics.json"
+#: Example batch-inference input, committed so the deployed app can offer it
+#: as a download and reviewers can reproduce the batch view (issue #38).
+SAMPLE_BATCH_CSV_PATH = REPO_ROOT / "data" / "01_raw" / "diamantes_batch_sample.csv"
 
 #: Model input columns (mirrors ``training_pipeline.MODEL_FEATURES``; the fitted
 #: ``ColumnTransformer`` selects by name, so only their presence matters).
 MODEL_FEATURES: list[str] = ["carat", "depth", "table", "volume", "cut", "color", "clarity"]
-#: Raw form fields, in the raw-CSV column order.
+#: Raw form fields, in the raw-CSV column order. Also the columns an uploaded
+#: batch file must carry (``price`` is optional and ignored for inference).
 RAW_INPUT_COLUMNS: list[str] = [
     "carat",
     "cut",
@@ -62,6 +74,9 @@ RAW_INPUT_COLUMNS: list[str] = [
     "y",
     "z",
 ]
+#: Column appended to the batch table with the model's estimate (mirrors
+#: ``inference_pipeline.PREDICTION_COLUMN``).
+PREDICTION_COLUMN = "predicted_price"
 
 #: Fallback when ``training_metrics.json`` is not in the checkout.
 DEFAULT_TEST_MAPE_PCT: float = 7.4
@@ -149,6 +164,86 @@ def input_warnings(*, carat: float, depth: float, x: float, y: float, z: float) 
                 f"({implied:.1f}%). Check the measurements."
             )
     return warnings
+
+
+# --- batch inference (issue #38) -----------------------------------
+# Same transform + model as the online tab, applied to a whole uploaded file
+# instead of one form row. Row-preserving: every input row gets a prediction
+# (bad / missing cells are left for the model pipeline's imputers), mirroring
+# ``inference_pipeline.run_inference_pipeline``.
+
+
+def read_batch_csv(source: object) -> pd.DataFrame:
+    """Read an uploaded batch file as text (no type coercion), like ``load_raw_data``.
+
+    Args:
+        source: Anything :func:`pandas.read_csv` accepts -- a path, a file-like
+            buffer, or Streamlit's ``UploadedFile``.
+
+    Returns:
+        The raw table, every column ``object`` so
+        :func:`diamond_features.build_inference_features` sees the original
+        string values.
+    """
+    return pd.read_csv(source, dtype="object", low_memory=False)
+
+
+def missing_required_columns(df: pd.DataFrame) -> list[str]:
+    """Names from :data:`RAW_INPUT_COLUMNS` absent from ``df`` (order preserved)."""
+    return [column for column in RAW_INPUT_COLUMNS if column not in df.columns]
+
+
+def batch_predict(model: BaseEstimator, raw_df: pd.DataFrame) -> pd.DataFrame:
+    """Price every row of a raw batch table.
+
+    Args:
+        model: The fitted price model.
+        raw_df: New data with the raw column layout (see
+            :data:`RAW_INPUT_COLUMNS`), values as text.
+
+    Returns:
+        ``raw_df`` (index reset) with a float :data:`PREDICTION_COLUMN` column
+        appended -- one prediction per input row, same order.
+
+    Raises:
+        ValueError: If a required raw column is missing.
+    """
+    missing = missing_required_columns(raw_df)
+    if missing:
+        raise ValueError(f"the file is missing required columns: {missing}")
+    features = build_inference_features(raw_df)[MODEL_FEATURES]
+    predictions = np.asarray(model.predict(features), dtype=float)
+    result = raw_df.reset_index(drop=True).copy()
+    result[PREDICTION_COLUMN] = predictions
+    return result
+
+
+def batch_summary(result: pd.DataFrame) -> dict[str, float]:
+    """Mean / min / max of the predicted prices (NaNs ignored)."""
+    prices = pd.to_numeric(result[PREDICTION_COLUMN], errors="coerce")
+    return {
+        "mean": float(prices.mean()),
+        "min": float(prices.min()),
+        "max": float(prices.max()),
+    }
+
+
+def batch_chart_data(result: pd.DataFrame) -> pd.DataFrame:
+    """A numeric ``carat`` / :data:`PREDICTION_COLUMN` frame for ``st.scatter_chart``."""
+    return pd.DataFrame(
+        {
+            "carat": pd.to_numeric(result["carat"], errors="coerce"),
+            PREDICTION_COLUMN: pd.to_numeric(result[PREDICTION_COLUMN], errors="coerce"),
+        }
+    ).dropna()
+
+
+def load_sample_batch_csv(path: Path = SAMPLE_BATCH_CSV_PATH) -> str | None:
+    """Text of the committed example batch file, or ``None`` if it isn't there."""
+    try:
+        return path.read_text()
+    except OSError:
+        return None
 
 
 # --- visual design ---------------------------------------------------
@@ -359,21 +454,8 @@ def _render_notes(notes: list[str]) -> None:  # pragma: no cover
     st.html(f'<ul class="dpx-notes">{items}</ul>')
 
 
-def main() -> None:  # pragma: no cover
-    """Render the online-demo page."""
-    st.set_page_config(page_title="Diamond price", page_icon="\U0001f48e", layout="wide")
-    st.markdown(_STYLE, unsafe_allow_html=True)
-    _render_hero()
-
-    if not MODEL_PATH.is_file():
-        st.error(
-            "The model file isn't here yet. Run `uv run python src/training_pipeline.py` to build it."
-        )
-        st.stop()
-
-    model = _load_model(str(MODEL_PATH))
-    test_mape = load_test_mape()
-
+def _render_online_tab(model: BaseEstimator, test_mape: float) -> None:  # pragma: no cover
+    """One-stone form on the left, the assessed value on the right."""
     stone_col, value_col = st.columns([1.04, 0.96], gap="large")
 
     with stone_col, st.form("stone", border=False):
@@ -429,9 +511,93 @@ def main() -> None:  # pragma: no cover
                     width="stretch",
                 )
 
+
+def _render_batch_tab(model: BaseEstimator) -> None:  # pragma: no cover
+    """Upload a CSV of many stones, price every row, view / download the table."""
+    st.markdown('<h2 class="dpx-h">A file of stones</h2>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="dpx-empty">Upload a CSV with one row per diamond and the columns '
+        "<code>carat, cut, color, clarity, depth, table, x, y, z</code>. Every row is priced; "
+        "download the results or read them below.</p>",
+        unsafe_allow_html=True,
+    )
+
+    sample = load_sample_batch_csv()
+    if sample is not None:
+        st.download_button(
+            "Download a sample CSV",
+            sample,
+            file_name="diamantes_batch_sample.csv",
+            mime="text/csv",
+        )
+
+    uploaded = st.file_uploader("CSV file", type=["csv"], label_visibility="collapsed")
+    if uploaded is None:
+        return
+
+    try:
+        raw_df = read_batch_csv(uploaded)
+    except (ValueError, pd.errors.ParserError) as exc:
+        st.error(f"Couldn't read that file as CSV: {exc}")
+        return
+
+    missing = missing_required_columns(raw_df)
+    if missing:
+        st.error(
+            f"The file is missing required columns: {missing}. "
+            f"It needs all of: {', '.join(RAW_INPUT_COLUMNS)}."
+        )
+        return
+
+    result = batch_predict(model, raw_df)
+    summary = batch_summary(result)
+
+    st.markdown(f'<p class="dpx-cap">Priced {len(result):,} diamonds</p>', unsafe_allow_html=True)
+    mean_col, min_col, max_col = st.columns(3)
+    mean_col.metric("Average", f"${summary['mean']:,.0f}")
+    min_col.metric("Lowest", f"${summary['min']:,.0f}")
+    max_col.metric("Highest", f"${summary['max']:,.0f}")
+
+    st.dataframe(result, hide_index=True, width="stretch")
+
+    chart_data = batch_chart_data(result)
+    if not chart_data.empty:
+        st.markdown('<p class="dpx-cap">Predicted price vs. carat</p>', unsafe_allow_html=True)
+        st.scatter_chart(chart_data, x="carat", y=PREDICTION_COLUMN, height=280)
+
+    st.download_button(
+        "Download predictions (CSV)",
+        result.to_csv(index=False),
+        file_name="diamantes_predictions.csv",
+        mime="text/csv",
+        type="primary",
+    )
+
+
+def main() -> None:  # pragma: no cover
+    """Render the demo page: an online tab and a batch tab over one model."""
+    st.set_page_config(page_title="Diamond price", page_icon="\U0001f48e", layout="wide")
+    st.markdown(_STYLE, unsafe_allow_html=True)
+    _render_hero()
+
+    if not MODEL_PATH.is_file():
+        st.error(
+            "The model file isn't here yet. Run `uv run python src/training_pipeline.py` to build it."
+        )
+        st.stop()
+
+    model = _load_model(str(MODEL_PATH))
+    test_mape = load_test_mape()
+
+    online_tab, batch_tab = st.tabs(["One stone", "A file of stones"])
+    with online_tab:
+        _render_online_tab(model, test_mape)
+    with batch_tab:
+        _render_batch_tab(model)
+
     st.markdown(
         '<p class="dpx-foot">Trained on a course dataset of about 53,000 graded stones. '
-        "Online estimates for one stone at a time.</p>",
+        "Price one stone online, or a whole file at once.</p>",
         unsafe_allow_html=True,
     )
 

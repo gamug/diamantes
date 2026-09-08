@@ -352,18 +352,25 @@ engineering **upstream** in `diamond_features` instead of inside a pickled `Func
 plain `joblib.load` and no helper redefinition. It writes to the **same path** as the notebook artifact
 (`data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib`), overwriting it.
 
-### Online demo — Streamlit ([`src/streamlit_app.py`](src/streamlit_app.py))
+### Demo — Streamlit ([`src/streamlit_app.py`](src/streamlit_app.py))
 
-A web form for **online inference** (one diamond → estimated price), wrapping the FTI transformation from
-`diamond_features` and the trained model. Numeric fields are clamped to the documented ranges; the result
-shows the point estimate, a rough `± test-MAPE` band, and warnings for sub-1 ct (extrapolation) or
-inconsistent geometry.
+One deployed app, two tabs, wrapping the FTI transformation from `diamond_features` and the trained model:
+
+- **One stone** — **online inference**: a web form (one diamond → estimated price). Numeric fields are
+  clamped to the documented ranges; the result shows the point estimate, a rough `± test-MAPE` band, and
+  warnings for sub-1 ct (extrapolation) or inconsistent geometry.
+- **A file of stones** — **batch inference**: upload a CSV of many diamonds, every row is priced
+  (`predicted_price` column), with a summary, a *price vs. carat* scatter, and a CSV download. Same
+  transform as `src/inference_pipeline.py`; row-preserving. A sample input lives at
+  [`data/01_raw/diamantes_batch_sample.csv`](data/01_raw/diamantes_batch_sample.csv).
 
 ```bash
 uv run streamlit run src/streamlit_app.py
 ```
 
-Deployment steps, usage instructions, limitations and evidence: **[`docs/streamlit-online-demo.md`](docs/streamlit-online-demo.md)**.
+Deployment steps, usage instructions, limitations and evidence:
+**[`docs/streamlit-online-demo.md`](docs/streamlit-online-demo.md)** (online) and
+**[`docs/streamlit-batch-demo.md`](docs/streamlit-batch-demo.md)** (batch).
 `requirements.txt` at the repo root pins the minimal deps for Streamlit Community Cloud.
 
 ## 🗺️ Roadmap
