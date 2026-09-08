@@ -6,6 +6,9 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json)](https://github.com/charliermarsh/ruff)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
+[![Streamlit app](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://diamantes-model.streamlit.app/)
+
+> **🚀 Live demo — <https://diamantes-model.streamlit.app/>** &nbsp;·&nbsp; one app, two tabs: *One stone* (online, single-diamond price) and *A file of stones* (batch, CSV upload → downloadable predictions). See [`docs/streamlit-online-demo.md`](docs/streamlit-online-demo.md) and [`docs/streamlit-batch-demo.md`](docs/streamlit-batch-demo.md).
 
 Academic project for the **Módulo de Ciencia de datos en producción**: predict the price of a diamond (`price`, in USD)
 from its physical and quality characteristics (`carat`, `cut`, `color`, `clarity`, `depth`, `table`, `x`, `y`,
@@ -352,18 +355,25 @@ engineering **upstream** in `diamond_features` instead of inside a pickled `Func
 plain `joblib.load` and no helper redefinition. It writes to the **same path** as the notebook artifact
 (`data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib`), overwriting it.
 
-### Online demo — Streamlit ([`src/streamlit_app.py`](src/streamlit_app.py))
+### Demo — Streamlit ([`src/streamlit_app.py`](src/streamlit_app.py))
 
-A web form for **online inference** (one diamond → estimated price), wrapping the FTI transformation from
-`diamond_features` and the trained model. Numeric fields are clamped to the documented ranges; the result
-shows the point estimate, a rough `± test-MAPE` band, and warnings for sub-1 ct (extrapolation) or
-inconsistent geometry.
+One deployed app, two tabs, wrapping the FTI transformation from `diamond_features` and the trained model:
+
+- **One stone** — **online inference**: a web form (one diamond → estimated price). Numeric fields are
+  clamped to the documented ranges; the result shows the point estimate, a rough `± test-MAPE` band, and
+  warnings for sub-1 ct (extrapolation) or inconsistent geometry.
+- **A file of stones** — **batch inference**: upload a CSV of many diamonds, every row is priced
+  (`predicted_price` column), with a summary, a *price vs. carat* scatter, and a CSV download. Same
+  transform as `src/inference_pipeline.py`; row-preserving. A sample input lives at
+  [`data/01_raw/diamantes_batch_sample.csv`](data/01_raw/diamantes_batch_sample.csv).
 
 ```bash
 uv run streamlit run src/streamlit_app.py
 ```
 
-Deployment steps, usage instructions, limitations and evidence: **[`docs/streamlit-online-demo.md`](docs/streamlit-online-demo.md)**.
+Deployment steps, usage instructions, limitations and evidence:
+**[`docs/streamlit-online-demo.md`](docs/streamlit-online-demo.md)** (online) and
+**[`docs/streamlit-batch-demo.md`](docs/streamlit-batch-demo.md)** (batch).
 `requirements.txt` at the repo root pins the minimal deps for Streamlit Community Cloud.
 
 ## 🗺️ Roadmap

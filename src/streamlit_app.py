@@ -1,15 +1,21 @@
-"""Streamlit online demo: single-diamond price prediction (issue #37).
+"""Streamlit demo: diamond price prediction, online and in batch (issues #37, #38).
 
-A web form for **online inference** — one diamond in, one estimated price out —
-served by the model trained in `training_pipeline.py` (issue #24) and loaded
-from `data/06_models/`.
+Two tabs, one deployed app:
 
-It reuses the exact feature transformation the batch `inference_pipeline.py`
-applies (`diamond_features.build_inference_features`: type-fix, range / category
-validation, `volume = x*y*z`, imputer-friendly `NaN`s), but does **not** import
-`inference_pipeline` itself, so the deployed app's dependency footprint stays
-small (`streamlit`, `pandas`, `numpy`, `scikit-learn`, `joblib` — no `deepchecks`
-/ `matplotlib`).
+* **One stone** — a web form for **online inference**: one diamond in, one
+  estimated price out (issue #37).
+* **A file of stones** — **batch inference** (issue #38): upload a CSV with
+  many rows, every row is priced, and the table of predictions can be
+  downloaded or viewed in place.
+
+Both tabs are served by the model trained in `training_pipeline.py` (issue #24,
+loaded from `data/06_models/`) and reuse the exact feature transformation the
+batch `inference_pipeline.py` applies (`diamond_features.build_inference_features`:
+type-fix, range / category validation, `volume = x*y*z`, imputer-friendly
+`NaN`s). The app does **not** import `inference_pipeline` itself, so the deployed
+footprint stays small (`streamlit`, `pandas`, `numpy`, `scikit-learn`, `scipy`,
+`joblib` — no `deepchecks` / `matplotlib`); the batch view charts with native
+`st.scatter_chart`.
 
 The layout follows a grading report: a two-column ledger (the stone's
 attributes | the assessed value) under a midnight display-velvet hero band,
@@ -20,7 +26,8 @@ Run locally:
 
     uv run streamlit run src/streamlit_app.py
 
-Deploy: see `docs/streamlit-online-demo.md`.
+Deploy: see `docs/streamlit-online-demo.md` (online) and
+`docs/streamlit-batch-demo.md` (batch).
 """
 
 from __future__ import annotations
@@ -28,6 +35,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 from joblib import load
@@ -46,11 +54,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = REPO_ROOT / "data" / "06_models" / "diamantes_price-hist_gradient_boosting-v1.joblib"
 #: Written by ``training_pipeline.py``; may be absent on a fresh checkout.
 METRICS_PATH = REPO_ROOT / "data" / "08_reporting" / "training_metrics.json"
+#: Example batch-inference input, committed so the deployed app can offer it
+#: as a download and reviewers can reproduce the batch view (issue #38).
+SAMPLE_BATCH_CSV_PATH = REPO_ROOT / "data" / "01_raw" / "diamantes_batch_sample.csv"
 
 #: Model input columns (mirrors ``training_pipeline.MODEL_FEATURES``; the fitted
 #: ``ColumnTransformer`` selects by name, so only their presence matters).
 MODEL_FEATURES: list[str] = ["carat", "depth", "table", "volume", "cut", "color", "clarity"]
-#: Raw form fields, in the raw-CSV column order.
+#: Raw form fields, in the raw-CSV column order. Also the columns an uploaded
+#: batch file must carry (``price`` is optional and ignored for inference).
 RAW_INPUT_COLUMNS: list[str] = [
     "carat",
     "cut",
@@ -62,6 +74,9 @@ RAW_INPUT_COLUMNS: list[str] = [
     "y",
     "z",
 ]
+#: Column appended to the batch table with the model's estimate (mirrors
+#: ``inference_pipeline.PREDICTION_COLUMN``).
+PREDICTION_COLUMN = "predicted_price"
 
 #: Fallback when ``training_metrics.json`` is not in the checkout.
 DEFAULT_TEST_MAPE_PCT: float = 7.4
@@ -149,6 +164,100 @@ def input_warnings(*, carat: float, depth: float, x: float, y: float, z: float) 
                 f"({implied:.1f}%). Check the measurements."
             )
     return warnings
+
+
+# --- batch inference (issue #38) -----------------------------------
+# Same transform + model as the online tab, applied to a whole uploaded file
+# instead of one form row. Row-preserving: every input row gets a prediction
+# (bad / missing cells are left for the model pipeline's imputers), mirroring
+# ``inference_pipeline.run_inference_pipeline``.
+
+
+def read_batch_csv(source: object) -> pd.DataFrame:
+    """Read an uploaded batch file as text (no type coercion), like ``load_raw_data``.
+
+    Args:
+        source: Anything :func:`pandas.read_csv` accepts -- a path, a file-like
+            buffer, or Streamlit's ``UploadedFile``.
+
+    Returns:
+        The raw table, every column ``object`` so
+        :func:`diamond_features.build_inference_features` sees the original
+        string values.
+    """
+    return pd.read_csv(source, dtype="object", low_memory=False)
+
+
+def missing_required_columns(df: pd.DataFrame) -> list[str]:
+    """Names from :data:`RAW_INPUT_COLUMNS` absent from ``df`` (order preserved)."""
+    return [column for column in RAW_INPUT_COLUMNS if column not in df.columns]
+
+
+def batch_predict(model: BaseEstimator, raw_df: pd.DataFrame) -> pd.DataFrame:
+    """Price every row of a raw batch table.
+
+    Args:
+        model: The fitted price model.
+        raw_df: New data with the raw column layout (see
+            :data:`RAW_INPUT_COLUMNS`), values as text.
+
+    Returns:
+        ``raw_df`` (index reset) with a float :data:`PREDICTION_COLUMN` column
+        appended -- one prediction per input row, same order. Any other input
+        columns are carried through untouched.
+
+    Raises:
+        ValueError: If a required raw column is missing, the file has no data
+            rows, an input column already uses the reserved
+            :data:`PREDICTION_COLUMN` name, or a model feature has no usable
+            value anywhere in the file (which would make the fitted pipeline
+            drop that column and mispredict every row).
+    """
+    missing = missing_required_columns(raw_df)
+    if missing:
+        raise ValueError(f"the file is missing required columns: {missing}")
+    if PREDICTION_COLUMN in raw_df.columns:
+        raise ValueError(f"an input column uses the reserved output name: {PREDICTION_COLUMN}")
+    if raw_df.empty:
+        raise ValueError("the file has no data rows")
+
+    features = build_inference_features(raw_df)[MODEL_FEATURES]
+    all_null = [column for column in features.columns if features[column].isna().all()]
+    if all_null:
+        raise ValueError(f"these model features have no usable value in the whole file: {all_null}")
+
+    predictions = np.asarray(model.predict(features), dtype=float)
+    result = raw_df.reset_index(drop=True).copy()
+    result[PREDICTION_COLUMN] = predictions
+    return result
+
+
+def batch_summary(result: pd.DataFrame) -> dict[str, float]:
+    """Mean / min / max of the predicted prices (NaNs ignored)."""
+    prices = pd.to_numeric(result[PREDICTION_COLUMN], errors="coerce")
+    return {
+        "mean": float(prices.mean()),
+        "min": float(prices.min()),
+        "max": float(prices.max()),
+    }
+
+
+def batch_chart_data(result: pd.DataFrame) -> pd.DataFrame:
+    """A numeric ``carat`` / :data:`PREDICTION_COLUMN` frame for ``st.scatter_chart``."""
+    return pd.DataFrame(
+        {
+            "carat": pd.to_numeric(result["carat"], errors="coerce"),
+            PREDICTION_COLUMN: pd.to_numeric(result[PREDICTION_COLUMN], errors="coerce"),
+        }
+    ).dropna()
+
+
+def load_sample_batch_csv(path: Path = SAMPLE_BATCH_CSV_PATH) -> str | None:
+    """Text of the committed example batch file, or ``None`` if it isn't there."""
+    try:
+        return path.read_text()
+    except OSError:
+        return None
 
 
 # --- visual design ---------------------------------------------------
@@ -303,7 +412,6 @@ def _load_model(path_str: str) -> BaseEstimator:  # pragma: no cover
 
 
 def _number_field(key: str) -> float:  # pragma: no cover
-    low, high = MEASUREMENT_BOUNDS[key]
     decimals = _DECIMALS[key]
     labels = {
         "carat": "Carat",
@@ -313,11 +421,15 @@ def _number_field(key: str) -> float:  # pragma: no cover
         "y": "y",
         "z": "z",
     }
+    # Only a floor of 0 (nothing physical is negative) -- deliberately no upper
+    # bound and no documented-minimum clamp, so a value outside MEASUREMENT_BOUNDS
+    # *can* be entered and the out-of-range confirmation dialog can catch it
+    # (st.number_input would otherwise silently clamp it away). See
+    # `range_warnings` / `_render_online_tab`.
     return float(
         st.number_input(
             labels[key],
-            min_value=float(low),
-            max_value=float(high),
+            min_value=0.0,
             value=float(_DEFAULTS[key]),
             step=10.0**-decimals,
             format=f"%.{decimals}f",
@@ -359,8 +471,241 @@ def _render_notes(notes: list[str]) -> None:  # pragma: no cover
     st.html(f'<ul class="dpx-notes">{items}</ul>')
 
 
+# --- online tab: out-of-range confirmation ------------------------
+# The numeric fields accept values outside their documented MEASUREMENT_BOUNDS
+# (see _number_field), and a value can also be inside those bounds yet outside
+# the range the model was *trained* on (sub-1 ct, or a depth that contradicts
+# x/y/z). Rather than price such inputs silently and only footnote the problem,
+# the tab pops a modal: "Estimate anyway" runs the model, "Go back" holds the
+# result until the inputs are fixed or resubmitted.
+
+#: Session-state keys for the confirmation handshake.
+_ONLINE_PENDING = "online_pending_fields"
+_ONLINE_CONFIRMED = "online_confirmed_signature"
+#: Stored in ``_ONLINE_CONFIRMED`` when the user declines the modal.
+_ONLINE_CANCELLED = "__cancelled__"
+
+#: Human labels for the numeric fields (used in range messages).
+_FIELD_LABELS: dict[str, str] = {"carat": "Carat", "depth": "Depth %", "table": "Table %"}
+
+
+def fields_signature(fields: dict[str, float | str]) -> str:
+    """Order-independent string identity of a set of form inputs."""
+    return json.dumps({key: str(value) for key, value in fields.items()}, sort_keys=True)
+
+
+def range_warnings(fields: dict[str, float | str]) -> list[str]:
+    """Notes for any numeric field sitting outside its documented physical range."""
+    out: list[str] = []
+    for key, (low, high) in MEASUREMENT_BOUNDS.items():
+        raw = fields.get(key)
+        if raw is None or str(raw).strip() == "":
+            continue
+        value = float(raw)
+        if not low <= value <= high:
+            label = _FIELD_LABELS.get(key, key)
+            out.append(f"{label} {value:g} is outside the supported {low:g} to {high:g} range.")
+    return out
+
+
+def submission_warnings(fields: dict[str, float | str]) -> list[str]:
+    """Every reason the given inputs are outside the model's reliable range."""
+    return range_warnings(fields) + input_warnings(
+        carat=float(fields["carat"]),
+        depth=float(fields["depth"]),
+        x=float(fields["x"]),
+        y=float(fields["y"]),
+        z=float(fields["z"]),
+    )
+
+
+@st.dialog("Inputs outside the model's reliable range")
+def _confirm_out_of_range(notes: list[str], signature: str) -> None:  # pragma: no cover
+    st.markdown(
+        "The model can still return a number, but one or more inputs sit outside "
+        "the range it was trained on, so the estimate would be unreliable:"
+    )
+    for note in notes:
+        st.markdown(f"- {note}")
+    go, back = st.columns(2)
+    if go.button("Estimate anyway", type="primary", width="stretch", key="oor_go"):
+        st.session_state[_ONLINE_CONFIRMED] = signature
+        st.rerun()
+    if back.button("Go back", width="stretch", key="oor_back"):
+        st.session_state[_ONLINE_CONFIRMED] = _ONLINE_CANCELLED
+        st.rerun()
+
+
+def _stone_form() -> tuple[dict[str, float | str], bool]:  # pragma: no cover
+    """The left-hand input form; returns the entered fields and the submit state."""
+    st.markdown('<h2 class="dpx-h">The stone</h2>', unsafe_allow_html=True)
+    fields: dict[str, float | str] = {}
+    left, right = st.columns(2)
+    with left:
+        fields["carat"] = _number_field("carat")
+        fields["color"] = _select_field("color")
+        fields["depth"] = _number_field("depth")
+    with right:
+        fields["cut"] = _select_field("cut")
+        fields["clarity"] = _select_field("clarity")
+        fields["table"] = _number_field("table")
+    st.markdown('<p class="dpx-cap">Measurements (mm)</p>', unsafe_allow_html=True)
+    mx, my, mz = st.columns(3)
+    with mx:
+        fields["x"] = _number_field("x")
+    with my:
+        fields["y"] = _number_field("y")
+    with mz:
+        fields["z"] = _number_field("z")
+    submitted = st.form_submit_button("Assess value", type="primary", width="stretch")
+    return fields, submitted
+
+
+_EMPTY_PROMPT = (
+    "<p class=\"dpx-empty\">Enter a stone's details and assess it. You'll get an "
+    "estimated market value with a likely range.</p>"
+)
+_AWAITING_PROMPT = (
+    '<p class="dpx-empty">These inputs are outside the model\'s reliable range. '
+    "Confirm in the dialog to run the estimate anyway.</p>"
+)
+_DECLINED_PROMPT = (
+    '<p class="dpx-empty">Estimate held back — the inputs are outside the model\'s '
+    "reliable range. Adjust them, or press <strong>Assess value</strong> again to confirm.</p>"
+)
+
+
+def _render_online_value(
+    model: BaseEstimator,
+    test_mape: float,
+    pending: dict[str, float | str] | None,
+    notes: list[str],
+    state: str,
+) -> None:  # pragma: no cover
+    """The right-hand panel: a prompt, the confirmation notice, or the estimate."""
+    st.markdown('<h2 class="dpx-h">Assessed value</h2>', unsafe_allow_html=True)
+    prompts = {"empty": _EMPTY_PROMPT, "awaiting": _AWAITING_PROMPT, "declined": _DECLINED_PROMPT}
+    if state in prompts:
+        st.markdown(prompts[state], unsafe_allow_html=True)
+        return
+
+    assert pending is not None  # state == "ready" only when a submission is pending
+    raw_row = build_input_row(pending)
+    price = predict_price(model, raw_row)
+    low, high = price_interval(price, test_mape)
+    _render_estimate(price, low, high, test_mape)
+    _render_notes(notes)
+    with st.expander("What the model used"):
+        model_input = prepare_features(raw_row).iloc[0]
+        st.dataframe(
+            pd.DataFrame(
+                {"feature": model_input.index, "value": model_input.astype(str).to_numpy()}
+            ),
+            hide_index=True,
+            width="stretch",
+        )
+
+
+def _render_online_tab(model: BaseEstimator, test_mape: float) -> None:  # pragma: no cover
+    """One-stone form on the left, the assessed value (with an out-of-range gate) on the right."""
+    stone_col, value_col = st.columns([1.04, 0.96], gap="large")
+    with stone_col, st.form("stone", border=False):
+        fields, submitted = _stone_form()
+
+    if submitted:
+        st.session_state[_ONLINE_PENDING] = dict(fields)
+        st.session_state.pop(_ONLINE_CONFIRMED, None)  # a new submission must be re-confirmed
+
+    pending: dict[str, float | str] | None = st.session_state.get(_ONLINE_PENDING)
+    notes = submission_warnings(pending) if pending else []
+    signature = fields_signature(pending) if pending else ""
+    confirmed = st.session_state.get(_ONLINE_CONFIRMED)
+    awaiting_confirmation = bool(notes) and confirmed not in (signature, _ONLINE_CANCELLED)
+
+    if not pending:
+        state = "empty"
+    elif awaiting_confirmation:
+        state = "awaiting"
+    elif notes and confirmed == _ONLINE_CANCELLED:
+        state = "declined"
+    else:
+        state = "ready"
+
+    with value_col:
+        _render_online_value(model, test_mape, pending, notes, state)
+
+    if awaiting_confirmation:
+        _confirm_out_of_range(notes, signature)
+
+
+def _render_batch_tab(model: BaseEstimator) -> None:  # pragma: no cover
+    """Upload a CSV of many stones, price every row, view / download the table."""
+    st.markdown('<h2 class="dpx-h">A file of stones</h2>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="dpx-empty">Upload a CSV with one row per diamond and the columns '
+        "<code>carat, cut, color, clarity, depth, table, x, y, z</code>. Every row is priced; "
+        "download the results or read them below.</p>",
+        unsafe_allow_html=True,
+    )
+
+    sample = load_sample_batch_csv()
+    if sample is not None:
+        st.download_button(
+            "Download a sample CSV",
+            sample,
+            file_name="diamantes_batch_sample.csv",
+            mime="text/csv",
+        )
+
+    uploaded = st.file_uploader("CSV file", type=["csv"], label_visibility="collapsed")
+    if uploaded is None:
+        return
+
+    try:
+        raw_df = read_batch_csv(uploaded)
+    except (ValueError, pd.errors.ParserError) as exc:
+        st.error(f"Couldn't read that file as CSV: {exc}")
+        return
+
+    missing = missing_required_columns(raw_df)
+    if missing:
+        st.error(
+            f"The file is missing required columns: {missing}. "
+            f"It needs all of: {', '.join(RAW_INPUT_COLUMNS)}."
+        )
+        return
+
+    try:
+        result = batch_predict(model, raw_df)
+    except ValueError as exc:
+        st.error(f"Can't price this file: {exc}")
+        return
+    summary = batch_summary(result)
+
+    st.markdown(f'<p class="dpx-cap">Priced {len(result):,} diamonds</p>', unsafe_allow_html=True)
+    mean_col, min_col, max_col = st.columns(3)
+    mean_col.metric("Average", f"${summary['mean']:,.0f}")
+    min_col.metric("Lowest", f"${summary['min']:,.0f}")
+    max_col.metric("Highest", f"${summary['max']:,.0f}")
+
+    st.dataframe(result, hide_index=True, width="stretch")
+
+    chart_data = batch_chart_data(result)
+    if not chart_data.empty:
+        st.markdown('<p class="dpx-cap">Predicted price vs. carat</p>', unsafe_allow_html=True)
+        st.scatter_chart(chart_data, x="carat", y=PREDICTION_COLUMN, height=280)
+
+    st.download_button(
+        "Download predictions (CSV)",
+        result.to_csv(index=False),
+        file_name="diamantes_predictions.csv",
+        mime="text/csv",
+        type="primary",
+    )
+
+
 def main() -> None:  # pragma: no cover
-    """Render the online-demo page."""
+    """Render the demo page: an online tab and a batch tab over one model."""
     st.set_page_config(page_title="Diamond price", page_icon="\U0001f48e", layout="wide")
     st.markdown(_STYLE, unsafe_allow_html=True)
     _render_hero()
@@ -374,64 +719,15 @@ def main() -> None:  # pragma: no cover
     model = _load_model(str(MODEL_PATH))
     test_mape = load_test_mape()
 
-    stone_col, value_col = st.columns([1.04, 0.96], gap="large")
-
-    with stone_col, st.form("stone", border=False):
-        st.markdown('<h2 class="dpx-h">The stone</h2>', unsafe_allow_html=True)
-        fields: dict[str, float | str] = {}
-        left, right = st.columns(2)
-        with left:
-            fields["carat"] = _number_field("carat")
-            fields["color"] = _select_field("color")
-            fields["depth"] = _number_field("depth")
-        with right:
-            fields["cut"] = _select_field("cut")
-            fields["clarity"] = _select_field("clarity")
-            fields["table"] = _number_field("table")
-        st.markdown('<p class="dpx-cap">Measurements (mm)</p>', unsafe_allow_html=True)
-        mx, my, mz = st.columns(3)
-        with mx:
-            fields["x"] = _number_field("x")
-        with my:
-            fields["y"] = _number_field("y")
-        with mz:
-            fields["z"] = _number_field("z")
-        submitted = st.form_submit_button("Assess value", type="primary", width="stretch")
-
-    with value_col:
-        st.markdown('<h2 class="dpx-h">Assessed value</h2>', unsafe_allow_html=True)
-        if not submitted:
-            st.markdown(
-                "<p class=\"dpx-empty\">Enter a stone's details and assess it. You'll get an "
-                "estimated market value with a likely range.</p>",
-                unsafe_allow_html=True,
-            )
-        else:
-            notes = input_warnings(
-                carat=float(fields["carat"]),
-                depth=float(fields["depth"]),
-                x=float(fields["x"]),
-                y=float(fields["y"]),
-                z=float(fields["z"]),
-            )
-            raw_row = build_input_row(fields)
-            price = predict_price(model, raw_row)
-            low, high = price_interval(price, test_mape)
-            _render_estimate(price, low, high, test_mape)
-            _render_notes(notes)
-            with st.expander("What the model used"):
-                model_input = prepare_features(raw_row).iloc[0]
-                st.dataframe(
-                    pd.DataFrame(
-                        {"feature": model_input.index, "value": model_input.astype(str).to_numpy()}
-                    ),
-                    hide_index=True,
-                    width="stretch",
-                )
+    online_tab, batch_tab = st.tabs(["One stone", "A file of stones"])
+    with online_tab:
+        _render_online_tab(model, test_mape)
+    with batch_tab:
+        _render_batch_tab(model)
 
     st.markdown(
         '<p class="dpx-foot">Trained on a course dataset of about 53,000 graded stones. '
-        "Online estimates for one stone at a time.</p>",
+        "Price one stone online, or a whole file at once.</p>",
         unsafe_allow_html=True,
     )
 

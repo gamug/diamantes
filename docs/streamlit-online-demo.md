@@ -1,12 +1,14 @@
 # Online demo — Streamlit app (issue #37)
 
-A single-page web form for **online inference**: enter one diamond's
-characteristics, get an estimated price from the model trained by
-`src/training_pipeline.py` (issue #24).
+A web form for **online inference**: enter one diamond's characteristics, get an
+estimated price from the model trained by `src/training_pipeline.py` (issue #24).
+It is the **“One stone”** tab of `src/streamlit_app.py`; the **“A file of
+stones”** tab does batch inference — see
+[`streamlit-batch-demo.md`](./streamlit-batch-demo.md) (issue #38).
 
 - **App:** [`src/streamlit_app.py`](../src/streamlit_app.py)
 - **Model:** `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib` (committed)
-- **Live app:** _add the Streamlit Community Cloud URL here after deploying_
+- **Live app:** <https://diamantes-model.streamlit.app/> (**“One stone”** tab)
 
 ## Usage instructions (end users)
 
@@ -18,10 +20,16 @@ the right.
    - **Carat** (0.2–5.01), **Depth %** (43–79), **Table %** (43–95).
    - **Cut / Color / Clarity** — pick a grade (worst → best).
    - **Measurements (mm)** — `x`, `y`, `z` (length, width, depth).
-   - Fields are pre-filled with a typical 1-carat round brilliant. Each numeric
-     field is clamped to the range in `data/01_raw/datos_diamantes_Info.txt`, so an
-     out-of-range value can't be submitted.
+   - Fields are pre-filled with a typical 1-carat round brilliant. Numeric
+     fields only block negative numbers — a value **outside** the documented
+     range (see `data/01_raw/datos_diamantes_Info.txt`) can be entered on
+     purpose, so the app can warn about it.
 3. Press **Assess value**.
+   - If any input is outside the range the model can be trusted on — a value
+     past its documented min/max (e.g. carat `8.0`), a sub-1 ct stone, or a
+     `depth` that contradicts `x/y/z` — a dialog lists the problems and asks to
+     confirm: **Estimate anyway** runs the model; **Go back** holds the result
+     until you adjust the inputs (or press **Assess value** again to confirm).
 4. Read the right panel:
    - **Estimated market value** — the point estimate, in USD.
    - **Likely between $X and $Y** — `estimate ± 7.4 %` (the model's held-out test
@@ -43,40 +51,60 @@ run `uv run python src/training_pipeline.py` first.
 
 ## Deployment — Streamlit Community Cloud
 
-1. Push this repo to GitHub (already done) with the model artifact committed at
-   `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib`.
-2. Sign in at <https://share.streamlit.io> with the GitHub account that owns the repo.
-3. **New app → From existing repo** and set:
-   - **Repository:** `gamug/diamantes`
-   - **Branch:** `main`
-   - **Main file path:** `src/streamlit_app.py`
-   - **Python version:** 3.12 (Advanced settings)
-4. Streamlit Cloud installs from [`requirements.txt`](../requirements.txt) — a
-   minimal, pinned subset of the project dependencies (the app needs only
-   `streamlit`, `pandas`, `numpy`, `scikit-learn`, `scipy`, `joblib`; it does
-   **not** import `deepchecks` / `matplotlib`). `streamlit run` puts `src/` on
-   `sys.path`, so the flat `src/` modules import by bare name.
-5. **Deploy.** First build takes a few minutes; afterwards the app is reachable at
-   a stable `https://<subdomain>.streamlit.app` URL. Paste that URL into
-   **Live app** above and into the PR / issue #37.
+The app is deployed at <https://diamantes-model.streamlit.app/>. It was created
+once, from the `main` branch, and redeploys automatically on every push.
 
-Redeploys are automatic on every push to `main`.
+1. Push this repo to GitHub (done) with the model artifact committed at
+   `data/06_models/diamantes_price-hist_gradient_boosting-v1.joblib` — Streamlit
+   Cloud has no build step to produce it.
+2. Sign in at <https://share.streamlit.io> with the GitHub account that owns
+   `gamug/diamantes`; authorise the Streamlit Community Cloud GitHub app.
+3. Click **Create app** → **Deploy a public app from GitHub**, and fill the form
+   with **exactly these values**:
+
+   | Form field | Value to enter |
+   | --- | --- |
+   | **Repository** | `gamug/diamantes` |
+   | **Branch** | `main` |
+   | **Main file path** | `src/streamlit_app.py` |
+   | **App URL** *(optional)* | a `diamantes-…` subdomain of your choice — this deployment uses `diamantes-model`, giving <https://diamantes-model.streamlit.app/> |
+
+4. *(optional)* **Advanced settings…** → **Python version** `3.12`; leave
+   **Secrets** empty — the app needs none.
+5. Click **Deploy**. The first build installs
+   [`requirements.txt`](../requirements.txt) — a minimal, pinned subset of the
+   project deps (`streamlit`, `pandas`, `numpy`, `scikit-learn`, `scipy`,
+   `joblib`; **no** `deepchecks` / `matplotlib`). `streamlit run` puts `src/` on
+   `sys.path`, so the flat `src/` modules import by bare name. First build takes
+   a few minutes.
+
+Redeploys are automatic on every push to `main`. The same field-by-field notes,
+plus the batch tab, are in
+[`streamlit-batch-demo.md`](./streamlit-batch-demo.md#deployment--streamlit-community-cloud).
 
 ## Limitations & expected behaviour
 
-- **Carat < 1.0 ct is extrapolation.** The training data over-represents larger
-  stones (its carat floor is ~1.0 ct — see `notebooks/2-exploration`), so
-  predictions below that are unreliable; the app shows a warning.
-- **Geometry consistency.** `depth` is *defined* as `2·z / (x + y) · 100`. If the
-  entered `depth` disagrees with the `x/y/z` you typed by more than 2 percentage
-  points, the app warns you to re-check the dimensions (it still predicts).
+- **Out-of-range inputs are gated.** The numeric fields accept any non-negative
+  value, so a figure past its documented min/max (`carat` 0.2–5.01, `depth`
+  43–79, `table` 43–95, `x/y/z` within their caps) can be entered. That, a
+  sub-1 ct stone (the training data's carat floor is ~1.0 ct — see
+  `notebooks/2-exploration`), or a `depth` that disagrees with
+  `2·z / (x + y) · 100` by more than 2 percentage points each trigger a
+  confirmation dialog before the model runs. The estimate is only produced
+  after **Estimate anyway**, with the same notes beside it; **Go back**
+  withholds it.
+- **Confirmed out-of-range estimates are still unreliable.** Confirming past the
+  dialog does not make the number trustworthy — it just records that you chose
+  to see it anyway.
 - **Point estimate, rough band.** The ± band is the model's average test MAPE
   applied symmetrically — it is not a per-prediction confidence interval.
 - **Static model.** The dataset is a one-time course snapshot; the model is not
   retrained on new data. Retraining means re-running `src/training_pipeline.py`
   and committing the new `.joblib`.
-- **Online only.** Batch scoring (CSV upload) is out of scope for issue #37 —
-  use `uv run python src/inference_pipeline.py` for that.
+- **This tab is one stone at a time.** Batch scoring (CSV upload) lives in the
+  **“A file of stones”** tab — see
+  [`streamlit-batch-demo.md`](./streamlit-batch-demo.md) — or run
+  `uv run python src/inference_pipeline.py`.
 
 ## Design
 
@@ -105,13 +133,16 @@ Prediction path against the committed model (`PYTHONPATH=src uv run python -c
 | --- | --- | --- | --- |
 | form defaults — 1.0 ct · Ideal · G · VS2 · 61.8/57 · 6.40/6.42/3.97 | **$6,310** | $5,843 – $6,777 | — |
 | 2.0 ct · Premium · F · VS2 · 62.0/58 · 8.10/8.05/5.00 | **$17,893** | $16,562 – $19,223 | — |
-| 0.5 ct · Fair · J · I1 · 64.0/58 · 5.00/5.00/3.20 | **$836** | $774 – $898 | sub-1 ct — rough extrapolation |
+| 0.5 ct · Fair · J · I1 · 64.0/58 · 5.00/5.00/3.20 | **$836** | $774 – $898 | sub-1 ct — confirm the dialog first |
 
 Streamlit's headless `AppTest` (`tests/test_streamlit_app.py`) loads the page,
 renders the 6 number + 3 select fields with no exception, submits the form, and
-asserts the estimated figure and the "What the model used" table appear; a
-sub-carat submission additionally surfaces the extrapolation note.
-`streamlit run … --server.headless true` also starts cleanly (`/_stcore/health` →
-`ok`).
+asserts the estimated figure and the "What the model used" table appear. For an
+out-of-range submission (carat 0.5) it asserts the confirmation dialog opens
+with **Estimate anyway** / **Go back**, that the figure is *not* shown until
+**Estimate anyway** is clicked, and that **Go back** leaves the estimate held
+back. `range_warnings` / `submission_warnings` / `fields_signature` are unit
+tested directly. `streamlit run … --server.headless true` also starts cleanly
+(`/_stcore/health` → `ok`).
 
-_Add screenshots of the deployed app (the ledger + a completed assessment) here._
+*Add screenshots of the deployed app (the ledger + a completed assessment) here.*
